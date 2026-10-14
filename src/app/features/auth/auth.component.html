@@ -1,0 +1,54 @@
+<section class="auth-page">
+  <div class="auth-card">
+    <h2 class="title">Inicio de sesión</h2>
+    <p class="subtitle">Sistema de Consultas Médicas</p>
+
+    <form
+      [formGroup]="loginForm"
+      (ngSubmit)="onSubmit()"
+      class="login-form"
+      novalidate>
+
+      <!-- Usuario -->
+      <div class="form-group">
+        <label for="username">Usuario</label>
+        <input id="username" type="text" formControlName="username" placeholder="Ej.: juan.perez"
+          [class.invalid]="username?.touched && username?.invalid" />
+        <div class="error" *ngIf="username?.touched && username?.invalid">
+          El usuario es obligatorio
+        </div>
+      </div>
+
+      <!-- Contraseña -->
+      <div class="form-group">
+        <label for="password">Contraseña</label>
+        <div class="password-wrapper">
+          <input id="password" [type]="showPassword ? 'text' : 'password'" formControlName="password" placeholder="••••••••"
+            [class.invalid]="password?.touched && password?.invalid" />
+          <button type="button" class="toggle-visibility" (click)="togglePasswordVisibility()"
+            [attr.aria-label]="showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'">
+            <svg *ngIf="!showPassword" lucideEye class="icon-toggle"></svg>
+            <svg *ngIf="showPassword" lucideEyeOff class="icon-toggle"></svg>
+          </button>
+        </div>
+        <div class="error" *ngIf="password?.touched && password?.invalid">
+          La contraseña es obligatoria
+        </div>
+      </div>
+
+      <!-- Mensaje de error del login -->
+      <div class="error auth-error" *ngIf="errorMessage">
+        {{ errorMessage }}
+      </div>
+
+      <!-- Botón de envío -->
+      <button class="btn-primary" type="submit" [disabled]="loading || loginForm.invalid">
+        <span *ngIf="!loading">Ingresar</span>
+        <span *ngIf="loading" class="spinner-container">
+          <svg lucideLoaderCircle class="spinner"></svg>
+          <span>Ingresando...</span>
+        </span>
+      </button>
+    </form>
+  </div>
+</section>
