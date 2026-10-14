@@ -1,0 +1,780 @@
+<div class="users-page">
+  <!-- Cabecera de la sección -->
+  <header class="page-header">
+    <div class="header-info">
+      <h1 class="page-title">Gestión de usuarios y roles</h1>
+      <p class="page-description">
+        Administración centralizada de cuentas de acceso, asignación de roles clínicos y control de estados en el sistema.
+      </p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="btn btn-primary" (click)="openCreateModal()">
+        <svg lucideUserPlus class="btn-icon"></svg>
+        <span>Nuevo usuario</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mensajes de alerta global -->
+  @if (successMessage) {
+    <div class="alert alert-success" role="alert">
+      <svg lucideCheck class="alert-icon"></svg>
+      <span>{{ successMessage }}</span>
+      <button type="button" class="alert-close" (click)="successMessage = ''">&times;</button>
+    </div>
+  }
+
+  @if (errorMessage && !showCreateModal && !showEditModal && !showResetPasswordModal && !showConfirmStatusModal) {
+    <div class="alert alert-danger" role="alert">
+      <svg lucideAlertTriangle class="alert-icon"></svg>
+      <span>{{ errorMessage }}</span>
+      <button type="button" class="alert-close" (click)="errorMessage = ''">&times;</button>
+    </div>
+  }
+
+  <!-- Barra de Filtros y Búsqueda -->
+  <section class="filters-card">
+    <div class="search-box">
+      <svg lucideSearch class="search-icon"></svg>
+      <input
+        type="text"
+        class="search-input"
+        placeholder="Buscar por usuario o correo electrónico..."
+        [value]="searchTerm"
+        (input)="onSearch($event)"
+      />
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-item">
+        <label for="filtroRol" class="filter-label">Rol:</label>
+        <select id="filtroRol" class="filter-select" (change)="onFilterRol($event)">
+          <option value="TODOS">Todos los roles</option>
+          <option value="ADMIN">ADMIN</option>
+          <option value="MEDICO">MEDICO</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="filtroEstado" class="filter-label">Estado:</label>
+        <select id="filtroEstado" class="filter-select" (change)="onFilterEstado($event)">
+          <option value="TODOS">Todos los estados</option>
+          <option value="ACTIVO">Activo</option>
+          <option value="INACTIVO">Inactivo</option>
+        </select>
+      </div>
+
+      <button type="button" class="btn btn-outline" (click)="cargarUsuarios()" title="Recargar lista">
+        <svg lucideRefreshCw class="btn-icon" [class.spinning]="loading"></svg>
+        <span class="refresh-text">Actualizar</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Tabla de Usuarios -->
+  <section class="table-card">
+    @if (loading) {
+      <div class="loading-state">
+        <svg lucideLoaderCircle class="spinner-icon"></svg>
+        <p>Cargando información de usuarios...</p>
+      </div>
+    } @else if (usuarios.length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon-wrap">
+          <svg lucideUsers class="empty-icon"></svg>
+        </div>
+        <h3>No se encontraron usuarios</h3>
+        <p>Intenta ajustar los filtros de búsqueda o registra un nuevo usuario en la plataforma.</p>
+        <button type="button" class="btn btn-secondary" (click)="openCreateModal()">
+          <svg lucideUserPlus class="btn-icon"></svg>
+          <span>Registrar primer usuario</span>
+        </button>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Usuario</th>
+              <th>Correo electrónico</th>
+              <th>Rol asignado</th>
+              <th>Estado</th>
+              <th>Fecha de registro</th>
+              <th class="text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (user of usuarios; track user.idUsuario) {
+              <tr>
+                <td class="font-semibold text-primary">
+                  <div class="user-cell">
+                    <span class="avatar-circle" [class.avatar-self]="isCurrentUser(user)">{{ user.username.charAt(0).toUpperCase() }}</span>
+                    <div class="user-text-col">
+                      <div class="user-name-line">
+                        <span class="user-uname">{{ user.username }}</span>
+                        @if (isCurrentUser(user)) {
+                          <span class="self-tag" title="Esta es tu cuenta con la que iniciaste sesión">Tú</span>
+                        }
+                        @if (isOtherAdmin(user)) {
+                          <span class="other-admin-tag" title="Administrador del sistema protegido">Admin Protegido</span>
+                        }
+                      </div>
+                      @if (user.nombreCompleto) {
+                        <span class="user-fname" style="font-size: 0.8rem; color: #64748b; font-weight: 400; display: block;">{{ user.nombreCompleto }}</span>
+                      }
+                    </div>
+                  </div>
+                </td>
+                <td>{{ user.correo }}</td>
+                <td>
+                  <div class="badges-wrapper">
+                    @for (r of user.roles; track r) {
+                      <span
+                        class="role-badge"
+                        [class.role-admin]="r.includes('ADMIN')"
+                        [class.role-medico]="r.includes('MEDICO')"
+                      >
+                        <svg lucideShield class="role-icon"></svg>
+                        {{ r.replace('ROLE_', '') }}
+                      </span>
+                    }
+                  </div>
+                </td>
+                <td>
+                  <span class="status-badge" [class.active]="user.activo" [class.inactive]="!user.activo">
+                    <span class="status-indicator-dot"></span>
+                    {{ user.activo ? 'Activo' : 'Inactivo' }}
+                  </span>
+                </td>
+                <td class="text-muted">
+                  {{ user.fechaCreacion | date:'dd/MM/yyyy HH:mm' }}
+                </td>
+                <td class="text-right">
+                  <div class="action-buttons">
+                    <!-- Ver detalles -->
+                    <button
+                      type="button"
+                      class="action-btn view-btn"
+                      (click)="openDetailModal(user)"
+                      title="Ver detalles de la cuenta"
+                      aria-label="Ver detalles"
+                    >
+                      <svg lucideEye class="action-icon"></svg>
+                    </button>
+
+                    <!-- Editar -->
+                    <button
+                      type="button"
+                      class="action-btn edit-btn"
+                      (click)="openEditModal(user)"
+                      [disabled]="!canEdit(user)"
+                      [title]="canEdit(user) ? 'Editar datos y roles' : getEditDisabledReason(user)"
+                      aria-label="Editar usuario"
+                    >
+                      <svg lucidePencil class="action-icon"></svg>
+                    </button>
+
+                    <!-- Restablecer contraseña -->
+                    <button
+                      type="button"
+                      class="action-btn key-btn"
+                      (click)="openResetPasswordModal(user)"
+                      [disabled]="!canResetPassword(user)"
+                      [title]="canResetPassword(user) ? 'Restablecer contraseña' : getResetPasswordDisabledReason(user)"
+                      aria-label="Restablecer contraseña"
+                    >
+                      <svg lucideKeyRound class="action-icon"></svg>
+                    </button>
+
+                    <!-- Activar / Desactivar -->
+                    <button
+                      type="button"
+                      class="action-btn status-btn"
+                      [class.btn-deactivate]="user.activo"
+                      [class.btn-activate]="!user.activo"
+                      (click)="openConfirmStatusModal(user)"
+                      [disabled]="user.activo && !canDeactivate(user)"
+                      [title]="user.activo && !canDeactivate(user) ? getDeactivateDisabledReason(user) : (user.activo ? 'Desactivar cuenta' : 'Activar cuenta')"
+                      [attr.aria-label]="user.activo ? 'Desactivar cuenta' : 'Activar cuenta'"
+                    >
+                      @if (user.activo) {
+                        <svg lucideBan class="action-icon"></svg>
+                      } @else {
+                        <svg lucideCheckCircle class="action-icon"></svg>
+                      }
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="table-footer">
+        <span class="table-count">Mostrando {{ usuarios.length }} registro(s)</span>
+      </div>
+    }
+  </section>
+
+  <!-- ======================================================== -->
+  <!-- MODAL 1: REGISTRAR NUEVO USUARIO                         -->
+  <!-- ======================================================== -->
+  @if (showCreateModal) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucideUserPlus class="modal-header-icon"></svg>
+            <h2>Registrar nuevo usuario</h2>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        @if (errorMessage) {
+          <div class="modal-alert-error">
+            <svg lucideAlertTriangle class="alert-icon"></svg>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <form [formGroup]="createForm" (ngSubmit)="submitCreate()" class="modal-form">
+          <div class="form-group">
+            <label for="createUsername" class="form-label">
+              Nombre de usuario <span class="required">*</span>
+            </label>
+            <input
+              id="createUsername"
+              type="text"
+              class="form-control"
+              placeholder="Ej: dr.martinez"
+              formControlName="username"
+              [class.is-invalid]="createForm.get('username')?.invalid && createForm.get('username')?.touched"
+            />
+            @if (createForm.get('username')?.invalid && createForm.get('username')?.touched) {
+              <div class="field-error">
+                @if (createForm.get('username')?.hasError('required')) {
+                  <span>Este campo es obligatorio.</span>
+                } @else if (createForm.get('username')?.hasError('minlength')) {
+                  <span>El usuario debe tener al menos 3 caracteres.</span>
+                } @else if (createForm.get('username')?.hasError('pattern')) {
+                  <span>Solo se permiten letras, números, puntos y guiones.</span>
+                }
+              </div>
+            }
+          </div>
+
+          <div class="form-group">
+            <label for="createNombreCompleto" class="form-label">
+              Nombre completo
+            </label>
+            <input
+              id="createNombreCompleto"
+              type="text"
+              class="form-control"
+              placeholder="Ej. Dr. Juan Pérez Gómez"
+              formControlName="nombreCompleto"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="createEmail" class="form-label">
+              Correo electrónico <span class="required">*</span>
+            </label>
+            <input
+              id="createEmail"
+              type="email"
+              class="form-control"
+              placeholder="correo@ejemplo.com"
+              formControlName="correo"
+              [class.is-invalid]="createForm.get('correo')?.invalid && createForm.get('correo')?.touched"
+            />
+            @if (createForm.get('correo')?.invalid && createForm.get('correo')?.touched) {
+              <div class="field-error">
+                @if (createForm.get('correo')?.hasError('required')) {
+                  <span>El correo electrónico es obligatorio.</span>
+                } @else if (createForm.get('correo')?.hasError('email')) {
+                  <span>Ingresa un correo electrónico válido.</span>
+                }
+              </div>
+            }
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col">
+              <label for="createPassword" class="form-label">
+                Contraseña <span class="required">*</span>
+              </label>
+              <div class="password-input-wrapper">
+                <input
+                  id="createPassword"
+                  [type]="showPasswordText ? 'text' : 'password'"
+                  class="form-control"
+                  placeholder="Mínimo 8 caracteres"
+                  formControlName="password"
+                  [class.is-invalid]="createForm.get('password')?.invalid && createForm.get('password')?.touched"
+                />
+                <button
+                  type="button"
+                  class="password-toggle-btn"
+                  (click)="showPasswordText = !showPasswordText"
+                  aria-label="Mostrar u ocultar contraseña"
+                >
+                  @if (showPasswordText) {
+                    <svg lucideEyeOff class="toggle-eye-icon"></svg>
+                  } @else {
+                    <svg lucideEye class="toggle-eye-icon"></svg>
+                  }
+                </button>
+              </div>
+              @if (createForm.get('password')?.invalid && createForm.get('password')?.touched) {
+                <div class="field-error">
+                  @if (createForm.get('password')?.hasError('required')) {
+                    <span>La contraseña es obligatoria.</span>
+                  } @else if (createForm.get('password')?.hasError('minlength') || createForm.get('password')?.hasError('passwordPolicy')) {
+                    <span>Debe tener al menos 8 caracteres con letras y números.</span>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="form-group col">
+              <label for="createConfirmPassword" class="form-label">
+                Confirmar contraseña <span class="required">*</span>
+              </label>
+              <div class="password-input-wrapper">
+                <input
+                  id="createConfirmPassword"
+                  [type]="showConfirmPasswordText ? 'text' : 'password'"
+                  class="form-control"
+                  placeholder="Repite la contraseña"
+                  formControlName="confirmPassword"
+                  [class.is-invalid]="createForm.get('confirmPassword')?.invalid && createForm.get('confirmPassword')?.touched"
+                />
+                <button
+                  type="button"
+                  class="password-toggle-btn"
+                  (click)="showConfirmPasswordText = !showConfirmPasswordText"
+                  aria-label="Mostrar u ocultar confirmación de contraseña"
+                >
+                  @if (showConfirmPasswordText) {
+                    <svg lucideEyeOff class="toggle-eye-icon"></svg>
+                  } @else {
+                    <svg lucideEye class="toggle-eye-icon"></svg>
+                  }
+                </button>
+              </div>
+              @if (createForm.get('confirmPassword')?.invalid && createForm.get('confirmPassword')?.touched) {
+                <div class="field-error">
+                  @if (createForm.get('confirmPassword')?.hasError('required')) {
+                    <span>Por favor confirma la contraseña.</span>
+                  } @else if (createForm.get('confirmPassword')?.hasError('passwordMismatch')) {
+                    <span>Las contraseñas no coinciden.</span>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="createRole" class="form-label">
+              Rol del usuario <span class="required">*</span>
+            </label>
+            <select id="createRole" class="form-control" formControlName="rol">
+              <option value="MEDICO">MEDICO (Acceso a consultas, citas y fichas clínicas)</option>
+              <option value="ADMIN">ADMIN (Acceso total y administración de usuarios)</option>
+            </select>
+            <small class="form-hint">Selecciona el perfil de permisos correspondiente a este usuario.</small>
+          </div>
+
+          <div class="form-group checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" formControlName="activo" />
+              <span>Habilitar cuenta inmediatamente (Activo)</span>
+            </label>
+          </div>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeModals()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="submitting">
+              @if (submitting) {
+                <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+                <span>Guardando...</span>
+              } @else {
+                <svg lucideCheck class="btn-icon"></svg>
+                <span>Crear usuario</span>
+              }
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL 2: EDITAR USUARIO                                  -->
+  <!-- ======================================================== -->
+  @if (showEditModal && selectedUser) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucidePencil class="modal-header-icon"></svg>
+            <h2>Editar usuario: {{ selectedUser.username }}</h2>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        @if (isCurrentUser(selectedUser)) {
+          <div class="modal-alert-info">
+            <svg lucideShield class="alert-icon"></svg>
+            <span>Estás editando tu propia cuenta de administrador. Por seguridad institucional, no puedes desactivar tu cuenta ni revocar tu rol ADMIN.</span>
+          </div>
+        }
+
+        @if (errorMessage) {
+          <div class="modal-alert-error">
+            <svg lucideAlertTriangle class="alert-icon"></svg>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <form [formGroup]="editForm" (ngSubmit)="submitEdit()" class="modal-form">
+          <div class="form-group">
+            <label for="editUsername" class="form-label">
+              Nombre de usuario <span class="required">*</span>
+            </label>
+            <input
+              id="editUsername"
+              type="text"
+              class="form-control"
+              formControlName="username"
+              [class.is-invalid]="editForm.get('username')?.invalid && editForm.get('username')?.touched"
+            />
+            @if (editForm.get('username')?.invalid && editForm.get('username')?.touched) {
+              <div class="field-error">
+                <span>Ingresa un nombre de usuario válido (3-50 caracteres).</span>
+              </div>
+            }
+          </div>
+
+          <div class="form-group">
+            <label for="editNombreCompleto" class="form-label">
+              Nombre completo
+            </label>
+            <input
+              id="editNombreCompleto"
+              type="text"
+              class="form-control"
+              placeholder="Ej. Dr. Juan Pérez Gómez"
+              formControlName="nombreCompleto"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="editEmail" class="form-label">
+              Correo electrónico <span class="required">*</span>
+            </label>
+            <input
+              id="editEmail"
+              type="email"
+              class="form-control"
+              formControlName="correo"
+              [class.is-invalid]="editForm.get('correo')?.invalid && editForm.get('correo')?.touched"
+            />
+            @if (editForm.get('correo')?.invalid && editForm.get('correo')?.touched) {
+              <div class="field-error">
+                <span>Ingresa un correo electrónico válido.</span>
+              </div>
+            }
+          </div>
+
+          <div class="form-group">
+            <label for="editRole" class="form-label">
+              Rol asignado <span class="required">*</span>
+            </label>
+            <select id="editRole" class="form-control" formControlName="rol">
+              <option value="MEDICO" [disabled]="isCurrentUser(selectedUser)">MEDICO</option>
+              <option value="ADMIN">ADMIN</option>
+            </select>
+            @if (isCurrentUser(selectedUser)) {
+              <small class="form-hint text-muted">Por seguridad institucional, no puedes despojarte del rol ADMIN.</small>
+            }
+          </div>
+
+          <div class="form-group">
+            <label for="editActivo" class="form-label">Estado de la cuenta</label>
+            <select id="editActivo" class="form-control" formControlName="activo">
+              <option [ngValue]="true">Activo</option>
+              <option [ngValue]="false" [disabled]="isCurrentUser(selectedUser)">Inactivo</option>
+            </select>
+            @if (isCurrentUser(selectedUser)) {
+              <small class="form-hint text-muted">No puedes desactivar tu propia cuenta en sesión.</small>
+            }
+          </div>
+
+          <div class="info-note">
+            <svg lucideKeyRound class="note-icon"></svg>
+            <span>La contraseña no se modifica aquí. Utiliza la opción independiente «Restablecer contraseña» para cambiarla.</span>
+          </div>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeModals()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="submitting">
+              @if (submitting) {
+                <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+                <span>Actualizando...</span>
+              } @else {
+                <svg lucideCheck class="btn-icon"></svg>
+                <span>Guardar cambios</span>
+              }
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL 3: RESTABLECER CONTRASEÑA                          -->
+  <!-- ======================================================== -->
+  @if (showResetPasswordModal && selectedUser) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card modal-sm" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucideKeyRound class="modal-header-icon"></svg>
+            <h2>Restablecer contraseña</h2>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        <p class="modal-subtitle">
+          Actualizar la contraseña para el usuario <strong>{{ selectedUser.username }}</strong>.
+        </p>
+
+        @if (errorMessage) {
+          <div class="modal-alert-error">
+            <svg lucideAlertTriangle class="alert-icon"></svg>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <form [formGroup]="passwordForm" (ngSubmit)="submitResetPassword()" class="modal-form">
+          <div class="form-group">
+            <label for="resetPassword" class="form-label">
+              Nueva contraseña <span class="required">*</span>
+            </label>
+            <div class="password-input-wrapper">
+              <input
+                id="resetPassword"
+                [type]="showPasswordText ? 'text' : 'password'"
+                class="form-control"
+                placeholder="Mínimo 8 caracteres con letras y números"
+                formControlName="password"
+                [class.is-invalid]="passwordForm.get('password')?.invalid && passwordForm.get('password')?.touched"
+              />
+              <button
+                type="button"
+                class="password-toggle-btn"
+                (click)="showPasswordText = !showPasswordText"
+                aria-label="Mostrar u ocultar contraseña"
+              >
+                @if (showPasswordText) {
+                  <svg lucideEyeOff class="toggle-eye-icon"></svg>
+                } @else {
+                  <svg lucideEye class="toggle-eye-icon"></svg>
+                }
+              </button>
+            </div>
+            @if (passwordForm.get('password')?.invalid && passwordForm.get('password')?.touched) {
+              <div class="field-error">
+                <span>La contraseña debe tener mínimo 8 caracteres con letras y números.</span>
+              </div>
+            }
+          </div>
+
+          <div class="form-group">
+            <label for="resetConfirmPassword" class="form-label">
+              Confirmar nueva contraseña <span class="required">*</span>
+            </label>
+            <div class="password-input-wrapper">
+              <input
+                id="resetConfirmPassword"
+                [type]="showConfirmPasswordText ? 'text' : 'password'"
+                class="form-control"
+                placeholder="Repite la contraseña"
+                formControlName="confirmPassword"
+                [class.is-invalid]="passwordForm.get('confirmPassword')?.invalid && passwordForm.get('confirmPassword')?.touched"
+              />
+              <button
+                type="button"
+                class="password-toggle-btn"
+                (click)="showConfirmPasswordText = !showConfirmPasswordText"
+                aria-label="Mostrar u ocultar confirmación de contraseña"
+              >
+                @if (showConfirmPasswordText) {
+                  <svg lucideEyeOff class="toggle-eye-icon"></svg>
+                } @else {
+                  <svg lucideEye class="toggle-eye-icon"></svg>
+                }
+              </button>
+            </div>
+            @if (passwordForm.get('confirmPassword')?.invalid && passwordForm.get('confirmPassword')?.touched) {
+              <div class="field-error">
+                <span>Las contraseñas no coinciden.</span>
+              </div>
+            }
+          </div>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeModals()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="submitting">
+              @if (submitting) {
+                <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+                <span>Actualizando...</span>
+              } @else {
+                <svg lucideKeyRound class="btn-icon"></svg>
+                <span>Actualizar contraseña</span>
+              }
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL 4: VER DETALLES DEL USUARIO                        -->
+  <!-- ======================================================== -->
+  @if (showDetailModal && selectedUser) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card modal-sm" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucideUsers class="modal-header-icon"></svg>
+            <h2>Detalles del usuario</h2>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        <div class="detail-body">
+          <div class="detail-row">
+            <span class="detail-label">ID de usuario:</span>
+            <span class="detail-value">#{{ selectedUser.idUsuario }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Nombre de usuario:</span>
+            <span class="detail-value font-semibold text-primary">{{ selectedUser.username }}</span>
+          </div>
+          @if (selectedUser.nombreCompleto) {
+            <div class="detail-row">
+              <span class="detail-label">Nombre completo:</span>
+              <span class="detail-value">{{ selectedUser.nombreCompleto }}</span>
+            </div>
+          }
+          <div class="detail-row">
+            <span class="detail-label">Correo electrónico:</span>
+            <span class="detail-value">{{ selectedUser.correo }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Estado de la cuenta:</span>
+            <span class="status-badge" [class.active]="selectedUser.activo" [class.inactive]="!selectedUser.activo">
+              <span class="status-indicator-dot"></span>
+              {{ selectedUser.activo ? 'Activo' : 'Inactivo' }}
+            </span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Roles asignados:</span>
+            <div class="badges-wrapper">
+              @for (r of selectedUser.roles; track r) {
+                <span class="role-badge" [class.role-admin]="r.includes('ADMIN')" [class.role-medico]="r.includes('MEDICO')">
+                  {{ r.replace('ROLE_', '') }}
+                </span>
+              }
+            </div>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Fecha de creación:</span>
+            <span class="detail-value">{{ selectedUser.fechaCreacion | date:'dd/MM/yyyy HH:mm:ss' }}</span>
+          </div>
+          @if (selectedUser.nombreMedico) {
+            <div class="detail-row">
+              <span class="detail-label">Médico asociado:</span>
+              <span class="detail-value font-semibold">{{ selectedUser.nombreMedico }}</span>
+            </div>
+          }
+        </div>
+
+        <footer class="modal-footer">
+          <button type="button" class="btn btn-secondary" (click)="closeModals()">
+            Cerrar
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL 5: CONFIRMACIÓN CAMBIO DE ESTADO (ACTIVAR/DESACTIVAR) -->
+  <!-- ======================================================== -->
+  @if (showConfirmStatusModal && statusTargetUser) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card modal-confirm" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucideAlertTriangle class="modal-header-icon text-warning"></svg>
+            <h2>Confirmar {{ statusTargetUser.activo ? 'desactivación' : 'activación' }}</h2>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        <div class="confirm-body">
+          <p>
+            ¿Estás seguro de que deseas {{ statusTargetUser.activo ? 'desactivar' : 'activar' }} la cuenta de
+            <strong>{{ statusTargetUser.username }}</strong>?
+          </p>
+          @if (statusTargetUser.activo) {
+            <div class="warning-callout">
+              <svg lucideAlertTriangle class="callout-icon"></svg>
+              <span>Una vez desactivada la cuenta, el usuario no podrá iniciar sesión ni realizar operaciones en el sistema.</span>
+            </div>
+          }
+        </div>
+
+        @if (errorMessage) {
+          <div class="modal-alert-error">
+            <svg lucideAlertTriangle class="alert-icon"></svg>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <footer class="modal-footer">
+          <button type="button" class="btn btn-outline" (click)="closeModals()" [disabled]="submitting">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn"
+            [class.btn-danger]="statusTargetUser.activo"
+            [class.btn-primary]="!statusTargetUser.activo"
+            (click)="confirmToggleStatus()"
+            [disabled]="submitting"
+          >
+            @if (submitting) {
+              <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+              <span>Procesando...</span>
+            } @else {
+              <span>Sí, {{ statusTargetUser.activo ? 'desactivar cuenta' : 'activar cuenta' }}</span>
+            }
+          </button>
+        </footer>
+      </div>
+    </div>
+  }
+</div>
