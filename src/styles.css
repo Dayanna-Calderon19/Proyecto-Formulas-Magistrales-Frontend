@@ -1,1 +1,20 @@
-/* You can add global styles to this file, and also import other style files */
+/* Global CSS variables */
+:root {
+  --color-primary: #173F4F; /* Azul petróleo */
+  --color-secondary: #4E8C80; /* Verde salvia */
+  --color-background: #F5F7F6; /* Blanco humo */
+  --color-surface: #FFFFFF; /* Blanco */
+  --color-text: #263238; /* Gris grafito */
+  --color-accent-soft: #DCE9E5; /* Verde niebla */
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-background);
+  color: var(--color-text);
+}
+
+/* Simple utility classes */
+.container { padding: 1rem; max-width: 1200px; margin: auto; }
+.title { color: var(--color-primary); margin: 1rem 0; }
