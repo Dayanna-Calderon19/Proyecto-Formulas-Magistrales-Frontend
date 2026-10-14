@@ -1,0 +1,740 @@
+<div class="consultas-page">
+  <!-- Cabecera de la página -->
+  <header class="page-header">
+    <div class="header-info">
+      <div class="title-with-icon">
+        <div class="header-icon-wrapper">
+          <svg lucideStethoscope class="header-icon"></svg>
+        </div>
+        <div>
+          <h1 class="page-title">Consultas médicas</h1>
+          <p class="page-description">
+            Registro y seguimiento de la atención clínica, diagnóstico médico, planes de tratamiento y prescripción de fórmulas magistrales personalizadas.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <!-- Estadísticas rápidas -->
+      <div class="stats-pills">
+        <div class="stat-pill">
+          <span class="stat-label">Total Atenciones:</span>
+          <span class="stat-value">{{ stats.total }}</span>
+        </div>
+      </div>
+
+      <!-- Botón Registrar Consulta -->
+      <button
+        *ngIf="canManage()"
+        class="btn btn-primary"
+        (click)="abrirModalCrear()"
+        type="button"
+        id="btn-nueva-consulta"
+      >
+        <svg lucidePlus class="btn-icon"></svg>
+        <span>Registrar consulta</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mensajes de Notificación -->
+  <div *ngIf="successMessage" class="alert alert-success" role="alert">
+    <svg lucideCheckCircle class="alert-icon"></svg>
+    <span>{{ successMessage }}</span>
+    <button class="alert-close" (click)="limpiarMensajes()" aria-label="Cerrar">&times;</button>
+  </div>
+
+  <div *ngIf="errorMessage" class="alert alert-danger" role="alert">
+    <svg lucideAlertTriangle class="alert-icon"></svg>
+    <span>{{ errorMessage }}</span>
+    <button class="alert-close" (click)="limpiarMensajes()" aria-label="Cerrar">&times;</button>
+  </div>
+
+  <!-- Barra de Filtros y Búsqueda -->
+  <section class="filters-card">
+    <div class="filters-grid">
+      <!-- Buscador -->
+      <div class="search-box">
+        <svg lucideSearch class="search-icon"></svg>
+        <input
+          type="text"
+          class="form-control search-input"
+          placeholder="Buscar por paciente, médico, motivo o diagnóstico..."
+          [(ngModel)]="searchTerm"
+          (input)="onSearchChange()"
+          id="input-busqueda-consultas"
+        />
+        <button
+          *ngIf="searchTerm"
+          class="search-clear-btn"
+          (click)="searchTerm = ''; onSearchChange()"
+          type="button"
+        >
+          &times;
+        </button>
+      </div>
+
+      <!-- Fecha Desde -->
+      <div class="filter-group">
+        <label for="filtro-desde-cons" class="filter-label">Desde:</label>
+        <input
+          type="date"
+          id="filtro-desde-cons"
+          class="form-control date-control"
+          [(ngModel)]="filtroFechaDesde"
+          (change)="cargarConsultas()"
+        />
+      </div>
+
+      <!-- Fecha Hasta -->
+      <div class="filter-group">
+        <label for="filtro-hasta-cons" class="filter-label">Hasta:</label>
+        <input
+          type="date"
+          id="filtro-hasta-cons"
+          class="form-control date-control"
+          [(ngModel)]="filtroFechaHasta"
+          (change)="cargarConsultas()"
+        />
+      </div>
+
+      <!-- Botón Limpiar -->
+      <div class="filter-actions">
+        <button
+          type="button"
+          class="btn btn-outline btn-sm"
+          (click)="limpiarFiltros()"
+          title="Restablecer filtros"
+        >
+          <svg lucideRefreshCw class="btn-icon-sm"></svg>
+          <span>Limpiar</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tabla de Consultas Médicas -->
+  <section class="table-container">
+    <!-- Estado de Carga -->
+    <div *ngIf="loading" class="loading-state">
+      <svg lucideLoaderCircle class="spinner-icon"></svg>
+      <p>Cargando atenciones y consultas médicas...</p>
+    </div>
+
+    <!-- Estado Vacío -->
+    <div *ngIf="!loading && consultas.length === 0" class="empty-state">
+      <div class="empty-icon-wrapper">
+        <svg lucideStethoscope class="empty-icon"></svg>
+      </div>
+      <h3>No se encontraron consultas médicas</h3>
+      <p>No existen registros que coincidan con la búsqueda o rango de fechas seleccionado.</p>
+      <button
+        *ngIf="searchTerm || filtroFechaDesde || filtroFechaHasta"
+        type="button"
+        class="btn btn-outline"
+        (click)="limpiarFiltros()"
+      >
+        <svg lucideRefreshCw class="btn-icon"></svg>
+        <span>Restablecer filtros</span>
+      </button>
+      <button
+        *ngIf="canManage() && !searchTerm && !filtroFechaDesde && !filtroFechaHasta"
+        type="button"
+        class="btn btn-primary"
+        (click)="abrirModalCrear()"
+      >
+        <svg lucidePlus class="btn-icon"></svg>
+        <span>Registrar la primera consulta</span>
+      </button>
+    </div>
+
+    <!-- Tabla con datos -->
+    <div *ngIf="!loading && consultas.length > 0" class="table-responsive">
+      <table class="data-table" id="tabla-consultas-medicas">
+        <thead>
+          <tr>
+            <th class="col-id">#ID</th>
+            <th>Fecha de Atención</th>
+            <th>Paciente</th>
+            <th>Médico Tratante</th>
+            <th>Cita de Origen</th>
+            <th>Diagnóstico Clínico</th>
+            <th>Fórmulas</th>
+            <th class="col-actions">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let consulta of consultas">
+            <!-- ID -->
+            <td class="col-id">
+              <span class="id-badge">#{{ consulta.idConsulta }}</span>
+            </td>
+
+            <!-- Fecha Consulta -->
+            <td>
+              <div class="datetime-cell">
+                <div class="date-row">
+                  <svg lucideCalendar class="cell-icon"></svg>
+                  <strong>{{ consulta.fechaConsulta | date:'dd/MM/yyyy' }}</strong>
+                </div>
+                <div class="time-row">
+                  <span class="text-muted">{{ consulta.fechaConsulta | date:'hh:mm a' }}</span>
+                </div>
+              </div>
+            </td>
+
+            <!-- Paciente -->
+            <td>
+              <div class="person-cell">
+                <span class="person-name">{{ consulta.nombrePaciente }}</span>
+                <span class="person-sub" *ngIf="consulta.dniPaciente">DNI: {{ consulta.dniPaciente }}</span>
+              </div>
+            </td>
+
+            <!-- Médico -->
+            <td>
+              <div class="person-cell">
+                <span class="doctor-name">Dr(a). {{ consulta.nombreMedico }}</span>
+                <span class="doctor-sub">{{ consulta.especialidadMedico }}</span>
+              </div>
+            </td>
+
+            <!-- Cita Asociada -->
+            <td>
+              <span *ngIf="consulta.idCita; else atencionDirecta" class="badge-cita">
+                Cita #{{ consulta.idCita }}
+              </span>
+              <ng-template #atencionDirecta>
+                <span class="badge-directa">Atención directa</span>
+              </ng-template>
+            </td>
+
+            <!-- Diagnóstico / Motivo -->
+            <td>
+              <div class="diag-cell">
+                <strong class="diag-title">{{ consulta.diagnostico }}</strong>
+                <span class="diag-motivo" title="{{ consulta.motivo }}">Motivo: {{ consulta.motivo }}</span>
+              </div>
+            </td>
+
+            <!-- Fórmulas Magistrales -->
+            <td>
+              <span
+                class="badge-formulas"
+                [class.has-formulas]="consulta.totalFormulas > 0"
+                title="{{ consulta.totalFormulas }} fórmula(s) magistral(es) vinculada(s)"
+              >
+                <svg lucideFlaskConical class="badge-icon"></svg>
+                <span>{{ consulta.totalFormulas }}</span>
+              </span>
+            </td>
+
+            <!-- Acciones -->
+            <td class="col-actions">
+              <div class="action-buttons">
+                <!-- Ver Detalle -->
+                <button
+                  type="button"
+                  class="action-btn action-view"
+                  (click)="abrirModalDetalle(consulta)"
+                  title="Ver detalle clínico completo"
+                >
+                  <svg lucideEye class="action-icon"></svg>
+                </button>
+
+                <!-- Prescribir Fórmula Magistral -->
+                <button
+                  *ngIf="canManage()"
+                  type="button"
+                  class="action-btn action-formula"
+                  (click)="irAFormulasMagistrales(consulta.idConsulta)"
+                  title="Prescribir fórmula magistral vinculada"
+                >
+                  <svg lucideFlaskConical class="action-icon"></svg>
+                </button>
+
+                <!-- Editar -->
+                <button
+                  *ngIf="canManage()"
+                  type="button"
+                  class="action-btn action-edit"
+                  (click)="abrirModalEditar(consulta)"
+                  title="Editar notas clínicas"
+                >
+                  <svg lucidePencil class="action-icon"></svg>
+                </button>
+
+                <!-- Eliminar (ADMIN) -->
+                <button
+                  *ngIf="isAdmin()"
+                  type="button"
+                  class="action-btn action-delete"
+                  (click)="abrirModalEliminar(consulta)"
+                  title="Eliminar consulta"
+                >
+                  <svg lucideTrash2 class="action-icon"></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pie de tabla -->
+    <div class="table-footer" *ngIf="!loading && consultas.length > 0">
+      <span>Mostrando {{ consultas.length }} consulta(s) médica(s)</span>
+    </div>
+  </section>
+
+  <!-- ========================================== -->
+  <!-- MODAL: REGISTRAR CONSULTA MÉDICA           -->
+  <!-- ========================================== -->
+  <div *ngIf="showCreateModal" class="modal-backdrop" (click)="cerrarModalCrear()">
+    <div class="modal-dialog modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble">
+              <svg lucideStethoscope class="modal-header-icon"></svg>
+            </div>
+            <div>
+              <h2 class="modal-title">Registrar nueva consulta médica</h2>
+              <p class="modal-subtitle">Ingrese la evaluación clínica, diagnóstico y tratamiento del paciente.</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalCrear()">&times;</button>
+        </div>
+
+        <form [formGroup]="createForm" (ngSubmit)="guardarCrear()" class="modal-form">
+          <div class="modal-body modal-scrollable">
+            <!-- 1. Cita previa o Atención directa -->
+            <div class="form-section">
+              <h3 class="section-title">
+                <svg lucideCalendar class="section-icon"></svg>
+                <span>Origen de la Atención Médica</span>
+              </h3>
+
+              <div class="form-group">
+                <label for="create-cons-cita" class="form-label">
+                  Vincular con Cita Médica previa (Opcional):
+                </label>
+                <select
+                  id="create-cons-cita"
+                  formControlName="idCita"
+                  class="form-control"
+                  (change)="onCitaChange($any($event.target).value)"
+                >
+                  <option [ngValue]="null">-- Atención directa (Sin cita previa programada) --</option>
+                  <option *ngFor="let c of citasDisponibles" [value]="c.idCita">
+                    Cita #{{ c.idCita }} ({{ c.fechaHora | date:'dd/MM/yyyy hh:mm a' }}) -
+                    Paciente: {{ c.nombrePaciente }} | Dr(a). {{ c.nombreMedico }}
+                  </option>
+                </select>
+                <span class="field-hint">
+                  Al vincular una cita, el paciente y médico se asocian de forma automática y la cita pasará a estado ATENDIDA.
+                </span>
+              </div>
+
+              <!-- Vista previa si hay cita seleccionada -->
+              <div *ngIf="obtenerCitaSeleccionada(createForm.get('idCita')?.value) as citaSel" class="consultation-preview-card">
+                <div class="preview-header">
+                  <strong>Datos derivados de la Cita Médica seleccionada:</strong>
+                </div>
+                <div class="preview-grid">
+                  <div>
+                    <span class="preview-lbl">Paciente:</span>
+                    <span class="preview-val">{{ citaSel.nombrePaciente }} (DNI: {{ citaSel.dniPaciente }})</span>
+                  </div>
+                  <div>
+                    <span class="preview-lbl">Médico tratante:</span>
+                    <span class="preview-val">Dr(a). {{ citaSel.nombreMedico }} ({{ citaSel.especialidadMedico }})</span>
+                  </div>
+                  <div class="preview-col-span">
+                    <span class="preview-lbl">Motivo registrado:</span>
+                    <span class="preview-val">{{ citaSel.motivo }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Selector de Paciente si es Atención directa -->
+              <div class="form-row mt-2" *ngIf="!createForm.get('idCita')?.value">
+                <div class="form-group flex-2">
+                  <label for="create-cons-paciente" class="form-label required">Paciente a atender:</label>
+                  <select
+                    id="create-cons-paciente"
+                    formControlName="idPaciente"
+                    class="form-control"
+                  >
+                    <option [ngValue]="null">-- Seleccione el paciente --</option>
+                    <option *ngFor="let p of pacientesDisponibles" [value]="p.idPaciente">
+                      {{ p.apellidos }}, {{ p.nombres }} (DNI: {{ p.dni }})
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Selector de Médico (para ADMIN) -->
+                <div class="form-group flex-1" *ngIf="isAdmin()">
+                  <label for="create-cons-medico" class="form-label required">Médico responsable:</label>
+                  <select id="create-cons-medico" formControlName="idMedico" class="form-control">
+                    <option [ngValue]="null">-- Seleccione médico --</option>
+                    <option *ngFor="let m of medicosDisponibles" [value]="m.idMedico">
+                      Dr(a). {{ m.apellidos }}, {{ m.nombres }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Evaluación Clínica y Diagnóstico -->
+            <div class="form-section">
+              <h3 class="section-title">
+                <svg lucideClipboardList class="section-icon"></svg>
+                <span>Evaluación y Diagnóstico Clínico</span>
+              </h3>
+
+              <div class="form-row">
+                <!-- Fecha Consulta -->
+                <div class="form-group flex-1">
+                  <label for="create-cons-fecha" class="form-label required">Fecha y hora de atención:</label>
+                  <input
+                    type="datetime-local"
+                    id="create-cons-fecha"
+                    formControlName="fechaConsulta"
+                    class="form-control"
+                  />
+                </div>
+
+                <!-- Motivo -->
+                <div class="form-group flex-2">
+                  <label for="create-cons-motivo" class="form-label required">Motivo de consulta / Anamnesis:</label>
+                  <input
+                    type="text"
+                    id="create-cons-motivo"
+                    formControlName="motivo"
+                    class="form-control"
+                    placeholder="Ej. Paciente acude por lesión eritematosa en rostro..."
+                    [class.is-invalid]="createForm.get('motivo')?.invalid && createForm.get('motivo')?.touched"
+                  />
+                  <div *ngIf="createForm.get('motivo')?.invalid && createForm.get('motivo')?.touched" class="invalid-feedback">
+                    <span>El motivo de consulta es obligatorio (mínimo 3 caracteres).</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Diagnóstico -->
+              <div class="form-group">
+                <label for="create-cons-diag" class="form-label required">Diagnóstico médico:</label>
+                <textarea
+                  id="create-cons-diag"
+                  formControlName="diagnostico"
+                  rows="2"
+                  class="form-control"
+                  placeholder="Diagnóstico clínico principal y hallazgos relevantes..."
+                  [class.is-invalid]="createForm.get('diagnostico')?.invalid && createForm.get('diagnostico')?.touched"
+                ></textarea>
+                <div *ngIf="createForm.get('diagnostico')?.invalid && createForm.get('diagnostico')?.touched" class="invalid-feedback">
+                  <span>El diagnóstico médico es obligatorio.</span>
+                </div>
+              </div>
+
+              <!-- Tratamiento -->
+              <div class="form-group">
+                <label for="create-cons-trat" class="form-label">Plan de tratamiento e indicaciones generales:</label>
+                <textarea
+                  id="create-cons-trat"
+                  formControlName="tratamiento"
+                  rows="2"
+                  class="form-control"
+                  placeholder="Medicación prescrita, cuidados tópicos, recomendaciones higiénico-dietéticas..."
+                ></textarea>
+              </div>
+
+              <!-- Observaciones -->
+              <div class="form-group">
+                <label for="create-cons-obs" class="form-label">Observaciones o próxima cita de control:</label>
+                <input
+                  type="text"
+                  id="create-cons-obs"
+                  formControlName="observaciones"
+                  class="form-control"
+                  placeholder="Ej. Control en 15 días, solicitar exámenes auxiliares si no hay mejoría"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="cerrarModalCrear()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="createForm.invalid || submitting">
+              <svg *ngIf="submitting" lucideLoaderCircle class="spinner-icon-sm"></svg>
+              <span>{{ submitting ? 'Guardando consulta...' : 'Guardar consulta médica' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: EDITAR CONSULTA MÉDICA              -->
+  <!-- ========================================== -->
+  <div *ngIf="showEditModal" class="modal-backdrop" (click)="cerrarModalEditar()">
+    <div class="modal-dialog modal-md" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble edit-bubble">
+              <svg lucidePencil class="modal-header-icon"></svg>
+            </div>
+            <div>
+              <h2 class="modal-title">Editar consulta médica #{{ selectedConsulta?.idConsulta }}</h2>
+              <p class="modal-subtitle">Modifique las notas clínicas, diagnóstico y tratamiento.</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalEditar()">&times;</button>
+        </div>
+
+        <form [formGroup]="editForm" (ngSubmit)="guardarEditar()" class="modal-form">
+          <div class="modal-body modal-scrollable">
+            <div class="form-group">
+              <label for="edit-cons-fecha" class="form-label required">Fecha de atención:</label>
+              <input type="datetime-local" id="edit-cons-fecha" formControlName="fechaConsulta" class="form-control" />
+            </div>
+
+            <div class="form-group">
+              <label for="edit-cons-motivo" class="form-label required">Motivo:</label>
+              <input type="text" id="edit-cons-motivo" formControlName="motivo" class="form-control" />
+            </div>
+
+            <div class="form-group">
+              <label for="edit-cons-diag" class="form-label required">Diagnóstico:</label>
+              <textarea id="edit-cons-diag" formControlName="diagnostico" rows="2" class="form-control"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-cons-trat" class="form-label">Plan de tratamiento:</label>
+              <textarea id="edit-cons-trat" formControlName="tratamiento" rows="2" class="form-control"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-cons-obs" class="form-label">Observaciones:</label>
+              <input type="text" id="edit-cons-obs" formControlName="observaciones" class="form-control" />
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="cerrarModalEditar()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="editForm.invalid || submitting">
+              <svg *ngIf="submitting" lucideLoaderCircle class="spinner-icon-sm"></svg>
+              <span>{{ submitting ? 'Guardando...' : 'Actualizar consulta' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: DETALLE CLÍNICO Y FÓRMULAS          -->
+  <!-- ========================================== -->
+  <div *ngIf="showDetailModal && selectedConsulta" class="modal-backdrop" (click)="cerrarModalDetalle()">
+    <div class="modal-dialog modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble detail-bubble">
+              <svg lucideEye class="modal-header-icon"></svg>
+            </div>
+            <div>
+              <div class="d-flex align-items-center gap-2">
+                <h2 class="modal-title">Consulta Médica #{{ selectedConsulta.idConsulta }}</h2>
+                <span class="badge-date">{{ selectedConsulta.fechaConsulta | date:'dd/MM/yyyy hh:mm a' }}</span>
+              </div>
+              <p class="modal-subtitle">
+                Paciente: {{ selectedConsulta.nombrePaciente }} | Médico: Dr(a). {{ selectedConsulta.nombreMedico }}
+              </p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalDetalle()">&times;</button>
+        </div>
+
+        <div class="modal-body modal-scrollable">
+          <!-- Tarjeta de Paciente y Médico -->
+          <div class="detail-card mb-3">
+            <div class="detail-card-header">
+              <svg lucideUser class="section-icon"></svg>
+              <h4>Contexto Clínico Asistencial</h4>
+            </div>
+            <div class="detail-card-body detail-grid-2">
+              <div>
+                <span class="detail-key">Paciente Atendido:</span>
+                <span class="detail-value fw-bold">{{ selectedConsulta.nombrePaciente }}</span>
+                <span class="detail-sub" *ngIf="selectedConsulta.dniPaciente">DNI: {{ selectedConsulta.dniPaciente }}</span>
+                <span class="detail-sub" *ngIf="selectedConsulta.telefonoPaciente">Tel: {{ selectedConsulta.telefonoPaciente }}</span>
+              </div>
+
+              <div>
+                <span class="detail-key">Médico Responsable:</span>
+                <span class="detail-value fw-bold">Dr(a). {{ selectedConsulta.nombreMedico }}</span>
+                <span class="detail-sub">{{ selectedConsulta.especialidadMedico }} (CMP: {{ selectedConsulta.colegiaturaMedico }})</span>
+              </div>
+
+              <div *ngIf="selectedConsulta.idCita" class="grid-col-full">
+                <span class="detail-key">Cita Médica Vinculada:</span>
+                <span class="detail-value">
+                  Cita #{{ selectedConsulta.idCita }} programada para el {{ selectedConsulta.fechaHoraCita | date:'dd/MM/yyyy hh:mm a' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Evaluación Clínica -->
+          <div class="detail-card mb-3">
+            <div class="detail-card-header">
+              <svg lucideFileText class="section-icon"></svg>
+              <h4>Evaluación y Diagnóstico</h4>
+            </div>
+            <div class="detail-card-body">
+              <div class="mb-2">
+                <span class="detail-key">Motivo de Consulta:</span>
+                <p class="detail-value">{{ selectedConsulta.motivo }}</p>
+              </div>
+
+              <div class="mb-2">
+                <span class="detail-key">Diagnóstico Médico:</span>
+                <div class="diag-highlight-box">
+                  {{ selectedConsulta.diagnostico }}
+                </div>
+              </div>
+
+              <div *ngIf="selectedConsulta.tratamiento" class="mb-2">
+                <span class="detail-key">Plan Terapéutico:</span>
+                <p class="detail-value">{{ selectedConsulta.tratamiento }}</p>
+              </div>
+
+              <div *ngIf="selectedConsulta.observaciones">
+                <span class="detail-key">Observaciones de Control:</span>
+                <p class="detail-value text-muted-obs">{{ selectedConsulta.observaciones }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fórmulas Magistrales Vinculadas -->
+          <div class="detail-card">
+            <div class="detail-card-header d-flex justify-content-between align-items-center">
+              <div class="d-flex align-items-center gap-2">
+                <svg lucideFlaskConical class="section-icon text-secondary"></svg>
+                <h4>Fórmulas Magistrales Prescritas ({{ selectedConsulta.totalFormulas }})</h4>
+              </div>
+              <button
+                *ngIf="canManage()"
+                type="button"
+                class="btn btn-outline btn-sm"
+                (click)="cerrarModalDetalle(); irAFormulasMagistrales(selectedConsulta.idConsulta)"
+              >
+                <svg lucidePlus class="btn-icon-sm"></svg>
+                <span>Prescribir fórmula</span>
+              </button>
+            </div>
+
+            <div class="detail-card-body">
+              <div *ngIf="selectedConsulta.formulas.length === 0" class="empty-formulas-box">
+                <p>No se han registrado fórmulas magistrales para esta consulta médica.</p>
+                <button
+                  *ngIf="canManage()"
+                  type="button"
+                  class="btn btn-outline btn-sm mt-1"
+                  (click)="cerrarModalDetalle(); irAFormulasMagistrales(selectedConsulta.idConsulta)"
+                >
+                  <svg lucideFlaskConical class="btn-icon-sm"></svg>
+                  <span>Prescribir fórmula magistral ahora</span>
+                </button>
+              </div>
+
+              <div *ngIf="selectedConsulta.formulas.length > 0" class="formulas-list">
+                <div *ngFor="let f of selectedConsulta.formulas" class="formula-item-card">
+                  <div class="formula-header">
+                    <div>
+                      <strong class="formula-name">{{ f.nombre }}</strong>
+                      <span class="formula-badge-id">#{{ f.idFormula }}</span>
+                    </div>
+                    <span class="status-badge status-activo">{{ f.estado }}</span>
+                  </div>
+                  <p class="formula-composition">{{ f.composicion }}</p>
+                  <div class="formula-qty">
+                    <span>Dosificación:</span>
+                    <strong>{{ f.cantidad }} {{ f.unidad }}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" (click)="cerrarModalDetalle()">
+            Cerrar
+          </button>
+          <button
+            *ngIf="canManage()"
+            type="button"
+            class="btn btn-primary"
+            (click)="cerrarModalDetalle(); abrirModalEditar(selectedConsulta)"
+          >
+            <svg lucidePencil class="btn-icon"></svg>
+            <span>Editar notas clínicas</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: ELIMINAR CONSULTA MÉDICA            -->
+  <!-- ========================================== -->
+  <div *ngIf="showDeleteModal && selectedConsulta" class="modal-backdrop" (click)="cerrarModalEliminar()">
+    <div class="modal-dialog modal-sm" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble cancel-bubble">
+              <svg lucideAlertTriangle class="modal-header-icon text-danger"></svg>
+            </div>
+            <div>
+              <h2 class="modal-title">Eliminar consulta médica</h2>
+              <p class="modal-subtitle">Consulta #{{ selectedConsulta.idConsulta }}</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalEliminar()">&times;</button>
+        </div>
+
+        <div class="modal-body modal-scrollable">
+          <p>
+            ¿Está seguro de eliminar la consulta médica del paciente
+            <strong>{{ selectedConsulta.nombrePaciente }}</strong> atendido el
+            <strong>{{ selectedConsulta.fechaConsulta | date:'dd/MM/yyyy' }}</strong>?
+          </p>
+          <p class="field-hint" *ngIf="selectedConsulta.totalFormulas > 0">
+            <strong>Atención:</strong> Esta consulta tiene {{ selectedConsulta.totalFormulas }} fórmula(s) magistral(es) vinculada(s). La base de datos protegerá la integridad del historial.
+          </p>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" (click)="cerrarModalEliminar()" [disabled]="submitting">
+            Cancelar
+          </button>
+          <button type="button" class="btn btn-danger" (click)="confirmarEliminar()" [disabled]="submitting">
+            <svg *ngIf="submitting" lucideLoaderCircle class="spinner-icon-sm"></svg>
+            <span>{{ submitting ? 'Eliminando...' : 'Confirmar eliminación' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

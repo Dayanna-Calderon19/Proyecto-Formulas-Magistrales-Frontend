@@ -1,0 +1,777 @@
+<div class="citas-page">
+  <!-- Cabecera de la página -->
+  <header class="page-header">
+    <div class="header-info">
+      <div class="title-with-icon">
+        <div class="header-icon-wrapper">
+          <svg lucideCalendar class="header-icon"></svg>
+        </div>
+        <div>
+          <h1 class="page-title">Gestión de citas médicas</h1>
+          <p class="page-description">
+            Organice el flujo asistencial de citas, reserve atenciones, reprograme o cancele consultas con verificación de disponibilidad en tiempo real.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <!-- Estadísticas rápidas -->
+      <div class="stats-pills">
+        <div class="stat-pill">
+          <span class="stat-label">Total:</span>
+          <span class="stat-value">{{ stats.total }}</span>
+        </div>
+        <div class="stat-pill pill-prog">
+          <span class="stat-label">Programadas:</span>
+          <span class="stat-value">{{ stats.programadas }}</span>
+        </div>
+        <div class="stat-pill pill-atend">
+          <span class="stat-label">Atendidas:</span>
+          <span class="stat-value">{{ stats.atendidas }}</span>
+        </div>
+      </div>
+
+      <!-- Botón Nueva Cita -->
+      <button
+        *ngIf="canManage()"
+        class="btn btn-primary"
+        (click)="abrirModalCrear()"
+        type="button"
+        id="btn-nueva-cita"
+      >
+        <svg lucidePlus class="btn-icon"></svg>
+        <span>Nueva cita</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mensajes de Notificación -->
+  <div *ngIf="successMessage" class="alert alert-success" role="alert">
+    <svg lucideCheckCircle class="alert-icon"></svg>
+    <span>{{ successMessage }}</span>
+    <button class="alert-close" (click)="limpiarMensajes()" aria-label="Cerrar">&times;</button>
+  </div>
+
+  <div *ngIf="errorMessage" class="alert alert-danger" role="alert">
+    <svg lucideAlertTriangle class="alert-icon"></svg>
+    <span>{{ errorMessage }}</span>
+    <button class="alert-close" (click)="limpiarMensajes()" aria-label="Cerrar">&times;</button>
+  </div>
+
+  <!-- Barra de Filtros y Búsqueda -->
+  <section class="filters-card">
+    <div class="filters-grid">
+      <!-- Buscador -->
+      <div class="search-box">
+        <svg lucideSearch class="search-icon"></svg>
+        <input
+          type="text"
+          class="form-control search-input"
+          placeholder="Buscar por paciente, médico o motivo de cita..."
+          [(ngModel)]="searchTerm"
+          (input)="onSearchChange()"
+          id="input-busqueda-citas"
+        />
+        <button
+          *ngIf="searchTerm"
+          class="search-clear-btn"
+          (click)="searchTerm = ''; onSearchChange()"
+          type="button"
+        >
+          &times;
+        </button>
+      </div>
+
+      <!-- Filtro por Estado -->
+      <div class="filter-group">
+        <label for="filtro-estado" class="filter-label">Estado:</label>
+        <select
+          id="filtro-estado"
+          class="form-control select-control"
+          [value]="filtroEstado"
+          (change)="onFiltroEstadoChange($any($event.target).value)"
+        >
+          <option value="TODOS">Todos los estados</option>
+          <option value="PROGRAMADA">Programada</option>
+          <option value="CONFIRMADA">Confirmada</option>
+          <option value="ATENDIDA">Atendida</option>
+          <option value="CANCELADA">Cancelada</option>
+        </select>
+      </div>
+
+      <!-- Fecha Desde -->
+      <div class="filter-group">
+        <label for="filtro-desde" class="filter-label">Desde:</label>
+        <input
+          type="date"
+          id="filtro-desde"
+          class="form-control date-control"
+          [(ngModel)]="filtroFechaDesde"
+          (change)="cargarCitas()"
+        />
+      </div>
+
+      <!-- Fecha Hasta -->
+      <div class="filter-group">
+        <label for="filtro-hasta" class="filter-label">Hasta:</label>
+        <input
+          type="date"
+          id="filtro-hasta"
+          class="form-control date-control"
+          [(ngModel)]="filtroFechaHasta"
+          (change)="cargarCitas()"
+        />
+      </div>
+
+      <!-- Botón Limpiar -->
+      <div class="filter-actions">
+        <button
+          type="button"
+          class="btn btn-outline btn-sm"
+          (click)="limpiarFiltros()"
+          title="Restablecer filtros"
+        >
+          <svg lucideRefreshCw class="btn-icon-sm"></svg>
+          <span>Limpiar</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tabla de Citas Médicas -->
+  <section class="table-container">
+    <!-- Estado de Carga -->
+    <div *ngIf="loading" class="loading-state">
+      <svg lucideLoaderCircle class="spinner-icon"></svg>
+      <p>Cargando citas médicas programadas...</p>
+    </div>
+
+    <!-- Estado Vacío -->
+    <div *ngIf="!loading && citas.length === 0" class="empty-state">
+      <div class="empty-icon-wrapper">
+        <svg lucideCalendar class="empty-icon"></svg>
+      </div>
+      <h3>No se encontraron citas médicas</h3>
+      <p>No existen citas que coincidan con los criterios de búsqueda o filtros seleccionados.</p>
+      <button
+        *ngIf="searchTerm || filtroEstado !== 'TODOS' || filtroFechaDesde || filtroFechaHasta"
+        type="button"
+        class="btn btn-outline"
+        (click)="limpiarFiltros()"
+      >
+        <svg lucideRefreshCw class="btn-icon"></svg>
+        <span>Restablecer filtros</span>
+      </button>
+      <button
+        *ngIf="canManage() && !searchTerm && filtroEstado === 'TODOS'"
+        type="button"
+        class="btn btn-primary"
+        (click)="abrirModalCrear()"
+      >
+        <svg lucidePlus class="btn-icon"></svg>
+        <span>Programar la primera cita</span>
+      </button>
+    </div>
+
+    <!-- Tabla de resultados -->
+    <div *ngIf="!loading && citas.length > 0" class="table-responsive">
+      <table class="data-table" id="tabla-citas-medicas">
+        <thead>
+          <tr>
+            <th class="col-id">#ID</th>
+            <th>Fecha y Hora</th>
+            <th>Paciente</th>
+            <th>Médico Responsable</th>
+            <th>Motivo de la Cita</th>
+            <th>Estado</th>
+            <th class="col-actions">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let cita of citas" [class.row-cancelled]="cita.estado === 'CANCELADA'">
+            <!-- ID -->
+            <td class="col-id">
+              <span class="id-badge">#{{ cita.idCita }}</span>
+            </td>
+
+            <!-- Fecha y Hora -->
+            <td>
+              <div class="datetime-cell">
+                <div class="date-row">
+                  <svg lucideCalendar class="cell-icon"></svg>
+                  <strong>{{ cita.fechaHora | date:'dd/MM/yyyy' }}</strong>
+                </div>
+                <div class="time-row">
+                  <svg lucideClock class="cell-icon text-muted"></svg>
+                  <span>{{ cita.fechaHora | date:'hh:mm a' }}</span>
+                </div>
+              </div>
+            </td>
+
+            <!-- Paciente -->
+            <td>
+              <div class="person-cell">
+                <span class="person-name">{{ cita.nombrePaciente }}</span>
+                <span class="person-sub" *ngIf="cita.dniPaciente">DNI: {{ cita.dniPaciente }}</span>
+                <span class="person-sub" *ngIf="cita.telefonoPaciente">Tel: {{ cita.telefonoPaciente }}</span>
+              </div>
+            </td>
+
+            <!-- Médico -->
+            <td>
+              <div class="person-cell">
+                <span class="doctor-name">Dr(a). {{ cita.nombreMedico }}</span>
+                <span class="doctor-sub">{{ cita.especialidadMedico }}</span>
+                <span class="doctor-sub" *ngIf="cita.colegiaturaMedico">CMP: {{ cita.colegiaturaMedico }}</span>
+              </div>
+            </td>
+
+            <!-- Motivo -->
+            <td>
+              <div class="reason-cell" title="{{ cita.motivo }}">
+                <span class="reason-text">{{ cita.motivo }}</span>
+                <span *ngIf="cita.observaciones" class="obs-indicator" title="{{ cita.observaciones }}">
+                  [Obs]
+                </span>
+              </div>
+            </td>
+
+            <!-- Estado -->
+            <td>
+              <span
+                class="status-badge"
+                [class.status-prog]="cita.estado === 'PROGRAMADA'"
+                [class.status-conf]="cita.estado === 'CONFIRMADA'"
+                [class.status-atend]="cita.estado === 'ATENDIDA'"
+                [class.status-canc]="cita.estado === 'CANCELADA'"
+              >
+                {{ cita.estado }}
+              </span>
+            </td>
+
+            <!-- Acciones -->
+            <td class="col-actions">
+              <div class="action-buttons">
+                <!-- Ver Detalle -->
+                <button
+                  type="button"
+                  class="action-btn action-view"
+                  (click)="abrirModalDetalle(cita)"
+                  title="Ver detalles de la cita"
+                >
+                  <svg lucideEye class="action-icon"></svg>
+                </button>
+
+                <!-- Iniciar Atención Médica en Consulta -->
+                <button
+                  *ngIf="canManage() && (cita.estado === 'PROGRAMADA' || cita.estado === 'CONFIRMADA')"
+                  type="button"
+                  class="action-btn action-attend"
+                  (click)="iniciarAtencion(cita)"
+                  title="Iniciar atención médica en consulta"
+                >
+                  <svg lucideStethoscope class="action-icon"></svg>
+                </button>
+
+                <!-- Editar Cita -->
+                <button
+                  *ngIf="canManage() && (cita.estado === 'PROGRAMADA' || cita.estado === 'CONFIRMADA')"
+                  type="button"
+                  class="action-btn action-edit"
+                  (click)="abrirModalEditar(cita)"
+                  title="Editar cita"
+                >
+                  <svg lucidePencil class="action-icon"></svg>
+                </button>
+
+                <!-- Reprogramar Cita -->
+                <button
+                  *ngIf="canManage() && (cita.estado === 'PROGRAMADA' || cita.estado === 'CONFIRMADA')"
+                  type="button"
+                  class="action-btn action-reschedule"
+                  (click)="abrirModalReprogramar(cita)"
+                  title="Reprogramar fecha y hora"
+                >
+                  <svg lucideCalendarClock class="action-icon"></svg>
+                </button>
+
+                <!-- Cancelar Cita -->
+                <button
+                  *ngIf="canManage() && cita.estado !== 'CANCELADA' && cita.estado !== 'ATENDIDA'"
+                  type="button"
+                  class="action-btn action-cancel"
+                  (click)="abrirModalCancelar(cita)"
+                  title="Cancelar cita"
+                >
+                  <svg lucideBan class="action-icon"></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pie de tabla -->
+    <div class="table-footer" *ngIf="!loading && citas.length > 0">
+      <span>Mostrando {{ citas.length }} cita(s) médica(s)</span>
+    </div>
+  </section>
+
+  <!-- ========================================== -->
+  <!-- MODAL: REGISTRAR CITA MÉDICA               -->
+  <!-- ========================================== -->
+  <div *ngIf="showCreateModal" class="modal-backdrop" (click)="cerrarModalCrear()">
+    <div class="modal-dialog modal-md" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble">
+              <svg lucideCalendar class="modal-header-icon"></svg>
+            </div>
+            <div>
+              <h2 class="modal-title">Programar nueva cita médica</h2>
+              <p class="modal-subtitle">Asigne el paciente, médico y horario de atención clínica.</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalCrear()">&times;</button>
+        </div>
+
+        <form [formGroup]="createForm" (ngSubmit)="guardarCrear()" class="modal-form">
+          <div class="modal-body modal-scrollable">
+            <!-- Paciente -->
+            <div class="form-group">
+              <label for="create-paciente" class="form-label required">Paciente:</label>
+              <select
+                id="create-paciente"
+                formControlName="idPaciente"
+                class="form-control"
+                [class.is-invalid]="createForm.get('idPaciente')?.invalid && createForm.get('idPaciente')?.touched"
+              >
+                <option [ngValue]="null">-- Seleccione un paciente registrado --</option>
+                <option *ngFor="let p of pacientesDisponibles" [value]="p.idPaciente">
+                  {{ p.apellidos }}, {{ p.nombres }} (DNI: {{ p.dni }})
+                </option>
+              </select>
+              <div *ngIf="createForm.get('idPaciente')?.invalid && createForm.get('idPaciente')?.touched" class="invalid-feedback">
+                <span>Debe seleccionar un paciente registrado.</span>
+              </div>
+            </div>
+
+            <!-- Médico -->
+            <div class="form-group" *ngIf="isAdmin()">
+              <label for="create-medico" class="form-label required">Médico responsable:</label>
+              <select
+                id="create-medico"
+                formControlName="idMedico"
+                class="form-control"
+                [class.is-invalid]="createForm.get('idMedico')?.invalid && createForm.get('idMedico')?.touched"
+              >
+                <option [ngValue]="null">-- Seleccione un médico habilitado --</option>
+                <option *ngFor="let m of medicosDisponibles" [value]="m.idMedico">
+                  Dr(a). {{ m.apellidos }}, {{ m.nombres }} ({{ m.especialidad }} - CMP: {{ m.colegiatura }})
+                </option>
+              </select>
+              <div *ngIf="createForm.get('idMedico')?.invalid && createForm.get('idMedico')?.touched" class="invalid-feedback">
+                <span>Debe seleccionar un médico responsable.</span>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <!-- Fecha y Hora -->
+              <div class="form-group flex-2">
+                <label for="create-fechahora" class="form-label required">Fecha y hora de la cita:</label>
+                <input
+                  type="datetime-local"
+                  id="create-fechahora"
+                  formControlName="fechaHora"
+                  [min]="minDateTimeStr"
+                  class="form-control"
+                  [class.is-invalid]="createForm.get('fechaHora')?.invalid && createForm.get('fechaHora')?.touched"
+                />
+                <div *ngIf="createForm.get('fechaHora')?.invalid && createForm.get('fechaHora')?.touched" class="invalid-feedback">
+                  <span>Seleccione una fecha y hora futura válida.</span>
+                </div>
+              </div>
+
+              <!-- Estado Inicial -->
+              <div class="form-group flex-1">
+                <label for="create-estado" class="form-label required">Estado inicial:</label>
+                <select id="create-estado" formControlName="estado" class="form-control">
+                  <option value="PROGRAMADA">PROGRAMADA</option>
+                  <option value="CONFIRMADA">CONFIRMADA</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Motivo -->
+            <div class="form-group">
+              <label for="create-motivo" class="form-label required">Motivo de consulta:</label>
+              <input
+                type="text"
+                id="create-motivo"
+                formControlName="motivo"
+                class="form-control"
+                placeholder="Ej. Control dermatológico, erupción cutánea, revisión de tratamiento"
+                [class.is-invalid]="createForm.get('motivo')?.invalid && createForm.get('motivo')?.touched"
+              />
+              <div *ngIf="createForm.get('motivo')?.invalid && createForm.get('motivo')?.touched" class="invalid-feedback">
+                <span *ngIf="createForm.get('motivo')?.errors?.['required']">El motivo de la cita es obligatorio.</span>
+                <span *ngIf="createForm.get('motivo')?.errors?.['minlength']">Debe tener al menos 3 caracteres.</span>
+              </div>
+            </div>
+
+            <!-- Observaciones -->
+            <div class="form-group">
+              <label for="create-obs" class="form-label">Observaciones o notas adicionales:</label>
+              <textarea
+                id="create-obs"
+                formControlName="observaciones"
+                rows="2"
+                class="form-control"
+                placeholder="Notas de preparación, requerimientos específicos del paciente..."
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="cerrarModalCrear()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="createForm.invalid || submitting">
+              <svg *ngIf="submitting" lucideLoaderCircle class="spinner-icon-sm"></svg>
+              <span>{{ submitting ? 'Guardando cita...' : 'Confirmar y programar cita' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: EDITAR CITA MÉDICA                  -->
+  <!-- ========================================== -->
+  <div *ngIf="showEditModal" class="modal-backdrop" (click)="cerrarModalEditar()">
+    <div class="modal-dialog modal-md" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble edit-bubble">
+              <svg lucidePencil class="modal-header-icon"></svg>
+            </div>
+            <div>
+              <h2 class="modal-title">Editar cita médica #{{ selectedCita?.idCita }}</h2>
+              <p class="modal-subtitle">Modifique los datos de la cita médica programada.</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalEditar()">&times;</button>
+        </div>
+
+        <form [formGroup]="editForm" (ngSubmit)="guardarEditar()" class="modal-form">
+          <div class="modal-body modal-scrollable">
+            <!-- Paciente -->
+            <div class="form-group">
+              <label for="edit-paciente" class="form-label required">Paciente:</label>
+              <select id="edit-paciente" formControlName="idPaciente" class="form-control">
+                <option *ngFor="let p of pacientesDisponibles" [value]="p.idPaciente">
+                  {{ p.apellidos }}, {{ p.nombres }} (DNI: {{ p.dni }})
+                </option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <!-- Fecha y Hora -->
+              <div class="form-group flex-2">
+                <label for="edit-fechahora" class="form-label required">Fecha y hora:</label>
+                <input
+                  type="datetime-local"
+                  id="edit-fechahora"
+                  formControlName="fechaHora"
+                  class="form-control"
+                  [class.is-invalid]="editForm.get('fechaHora')?.invalid && editForm.get('fechaHora')?.touched"
+                />
+              </div>
+
+              <!-- Estado -->
+              <div class="form-group flex-1">
+                <label for="edit-estado" class="form-label required">Estado:</label>
+                <select id="edit-estado" formControlName="estado" class="form-control">
+                  <option value="PROGRAMADA">PROGRAMADA</option>
+                  <option value="CONFIRMADA">CONFIRMADA</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Motivo -->
+            <div class="form-group">
+              <label for="edit-motivo" class="form-label required">Motivo:</label>
+              <input type="text" id="edit-motivo" formControlName="motivo" class="form-control" />
+            </div>
+
+            <!-- Observaciones -->
+            <div class="form-group">
+              <label for="edit-obs" class="form-label">Observaciones:</label>
+              <textarea id="edit-obs" formControlName="observaciones" rows="2" class="form-control"></textarea>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="cerrarModalEditar()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="editForm.invalid || submitting">
+              <svg *ngIf="submitting" lucideLoaderCircle class="spinner-icon-sm"></svg>
+              <span>{{ submitting ? 'Actualizando...' : 'Guardar cambios' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: REPROGRAMAR CITA MÉDICA             -->
+  <!-- ========================================== -->
+  <div *ngIf="showRescheduleModal && selectedCita" class="modal-backdrop" (click)="cerrarModalReprogramar()">
+    <div class="modal-dialog modal-sm" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble reschedule-bubble">
+              <svg lucideCalendarClock class="modal-header-icon"></svg>
+            </div>
+            <div>
+              <h2 class="modal-title">Reprogramar cita</h2>
+              <p class="modal-subtitle">Cita #{{ selectedCita.idCita }} - {{ selectedCita.nombrePaciente }}</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalReprogramar()">&times;</button>
+        </div>
+
+        <form [formGroup]="rescheduleForm" (ngSubmit)="guardarReprogramar()" class="modal-form">
+          <div class="modal-body modal-scrollable">
+            <div class="info-alert-card mb-3">
+              <span class="info-card-lbl">Horario actual:</span>
+              <span class="info-card-val">{{ selectedCita.fechaHora | date:'dd/MM/yyyy hh:mm a' }}</span>
+              <span class="info-card-sub">Médico: Dr(a). {{ selectedCita.nombreMedico }}</span>
+            </div>
+
+            <div class="form-group">
+              <label for="reschedule-fechahora" class="form-label required">Nueva fecha y hora:</label>
+              <input
+                type="datetime-local"
+                id="reschedule-fechahora"
+                formControlName="nuevaFechaHora"
+                [min]="minDateTimeStr"
+                class="form-control"
+                [class.is-invalid]="rescheduleForm.get('nuevaFechaHora')?.invalid && rescheduleForm.get('nuevaFechaHora')?.touched"
+              />
+              <div *ngIf="rescheduleForm.get('nuevaFechaHora')?.invalid && rescheduleForm.get('nuevaFechaHora')?.touched" class="invalid-feedback">
+                <span>Debe seleccionar una nueva fecha y hora futura válida.</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="reschedule-motivo" class="form-label">Motivo de la reprogramación:</label>
+              <textarea
+                id="reschedule-motivo"
+                formControlName="motivoReprogramacion"
+                rows="2"
+                class="form-control"
+                placeholder="Ej. Solicitud del paciente por viaje, cruce de horario, indicación médica..."
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="cerrarModalReprogramar()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="rescheduleForm.invalid || submitting">
+              <svg *ngIf="submitting" lucideLoaderCircle class="spinner-icon-sm"></svg>
+              <span>{{ submitting ? 'Reprogramando...' : 'Confirmar reprogramación' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: CANCELAR CITA MÉDICA                -->
+  <!-- ========================================== -->
+  <div *ngIf="showCancelModal && selectedCita" class="modal-backdrop" (click)="cerrarModalCancelar()">
+    <div class="modal-dialog modal-sm" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble cancel-bubble">
+              <svg lucideBan class="modal-header-icon text-danger"></svg>
+            </div>
+            <div>
+              <h2 class="modal-title">Cancelar cita médica</h2>
+              <p class="modal-subtitle">Cita #{{ selectedCita.idCita }} - {{ selectedCita.nombrePaciente }}</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalCancelar()">&times;</button>
+        </div>
+
+        <form [formGroup]="cancelForm" (ngSubmit)="guardarCancelar()" class="modal-form">
+          <div class="modal-body modal-scrollable">
+            <p>
+              ¿Está seguro de cancelar la cita programada para el
+              <strong>{{ selectedCita.fechaHora | date:'dd/MM/yyyy hh:mm a' }}</strong>?
+            </p>
+            <p class="field-hint">
+              Esta acción registrará la cancelación preservando la cita en el historial médico para auditoría.
+            </p>
+
+            <div class="form-group mt-2">
+              <label for="cancel-motivo" class="form-label required">Motivo o justificación de cancelación:</label>
+              <textarea
+                id="cancel-motivo"
+                formControlName="motivoCancelacion"
+                rows="2"
+                class="form-control"
+                placeholder="Indique la causa de la cancelación..."
+                [class.is-invalid]="cancelForm.get('motivoCancelacion')?.invalid && cancelForm.get('motivoCancelacion')?.touched"
+              ></textarea>
+              <div *ngIf="cancelForm.get('motivoCancelacion')?.invalid && cancelForm.get('motivoCancelacion')?.touched" class="invalid-feedback">
+                <span>El motivo de cancelación es obligatorio.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="cerrarModalCancelar()" [disabled]="submitting">
+              Volver
+            </button>
+            <button type="submit" class="btn btn-danger" [disabled]="cancelForm.invalid || submitting">
+              <svg *ngIf="submitting" lucideLoaderCircle class="spinner-icon-sm"></svg>
+              <span>{{ submitting ? 'Cancelando...' : 'Confirmar cancelación' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: VER DETALLE DE CITA MÉDICA          -->
+  <!-- ========================================== -->
+  <div *ngIf="showDetailModal && selectedCita" class="modal-backdrop" (click)="cerrarModalDetalle()">
+    <div class="modal-dialog modal-md" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble detail-bubble">
+              <svg lucideEye class="modal-header-icon"></svg>
+            </div>
+            <div>
+              <div class="d-flex align-items-center gap-2">
+                <h2 class="modal-title">Cita Médica #{{ selectedCita.idCita }}</h2>
+                <span
+                  class="status-badge"
+                  [class.status-prog]="selectedCita.estado === 'PROGRAMADA'"
+                  [class.status-conf]="selectedCita.estado === 'CONFIRMADA'"
+                  [class.status-atend]="selectedCita.estado === 'ATENDIDA'"
+                  [class.status-canc]="selectedCita.estado === 'CANCELADA'"
+                >
+                  {{ selectedCita.estado }}
+                </span>
+              </div>
+              <p class="modal-subtitle">Fecha: {{ selectedCita.fechaHora | date:'EEEE dd/MM/yyyy hh:mm a' }}</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalDetalle()">&times;</button>
+        </div>
+
+        <div class="modal-body modal-scrollable">
+          <!-- Paciente -->
+          <div class="detail-card mb-3">
+            <div class="detail-card-header">
+              <svg lucideClipboardList class="section-icon"></svg>
+              <h4>Datos del Paciente</h4>
+            </div>
+            <div class="detail-card-body detail-grid-2">
+              <div>
+                <span class="detail-key">Nombres y Apellidos:</span>
+                <span class="detail-value fw-bold">{{ selectedCita.nombrePaciente }}</span>
+              </div>
+              <div>
+                <span class="detail-key">Documento de Identidad:</span>
+                <span class="detail-value">{{ selectedCita.dniPaciente || 'No registrado' }}</span>
+              </div>
+              <div>
+                <span class="detail-key">Teléfono:</span>
+                <span class="detail-value">{{ selectedCita.telefonoPaciente || 'No registrado' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Médico -->
+          <div class="detail-card mb-3">
+            <div class="detail-card-header">
+              <svg lucideStethoscope class="section-icon"></svg>
+              <h4>Médico Asignado</h4>
+            </div>
+            <div class="detail-card-body detail-grid-2">
+              <div>
+                <span class="detail-key">Especialista:</span>
+                <span class="detail-value fw-bold">Dr(a). {{ selectedCita.nombreMedico }}</span>
+              </div>
+              <div>
+                <span class="detail-key">Especialidad:</span>
+                <span class="detail-value">{{ selectedCita.especialidadMedico }}</span>
+              </div>
+              <div *ngIf="selectedCita.colegiaturaMedico">
+                <span class="detail-key">Colegiatura CMP:</span>
+                <span class="detail-value">{{ selectedCita.colegiaturaMedico }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Motivo y Observaciones -->
+          <div class="detail-card">
+            <div class="detail-card-header">
+              <svg lucideCalendar class="section-icon"></svg>
+              <h4>Detalle de la Cita</h4>
+            </div>
+            <div class="detail-card-body">
+              <div>
+                <span class="detail-key">Motivo Clínico de Consulta:</span>
+                <p class="detail-value fw-bold">{{ selectedCita.motivo }}</p>
+              </div>
+
+              <div *ngIf="selectedCita.observaciones" class="mt-2">
+                <span class="detail-key">Historial y Observaciones:</span>
+                <pre class="obs-box">{{ selectedCita.observaciones }}</pre>
+              </div>
+
+              <div *ngIf="selectedCita.idConsulta" class="mt-2 consultation-linked-box">
+                <svg lucideCheckCircle class="text-success"></svg>
+                <span>Esta cita fue atendida en la Consulta Médica #{{ selectedCita.idConsulta }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" (click)="cerrarModalDetalle()">
+            Cerrar
+          </button>
+          <button
+            *ngIf="canManage() && (selectedCita.estado === 'PROGRAMADA' || selectedCita.estado === 'CONFIRMADA')"
+            type="button"
+            class="btn btn-primary"
+            (click)="cerrarModalDetalle(); iniciarAtencion(selectedCita)"
+          >
+            <svg lucideStethoscope class="btn-icon"></svg>
+            <span>Iniciar Consulta Médica</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
