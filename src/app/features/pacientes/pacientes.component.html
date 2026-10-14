@@ -1,0 +1,843 @@
+<div class="pacientes-page">
+  <!-- Cabecera de la sección -->
+  <header class="page-header">
+    <div class="header-info">
+      <h1 class="page-title">Gestión de pacientes</h1>
+      <p class="page-description">
+        Registro centralizado, seguimiento de fichas médicas e historial clínico de los pacientes atendidos en la institución.
+      </p>
+    </div>
+    <div class="header-actions">
+      <button type="button" class="btn btn-primary" (click)="openCreateModal()">
+        <svg lucideUserPlus class="btn-icon"></svg>
+        <span>Registrar paciente</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mensajes de alerta global -->
+  @if (successMessage) {
+    <div class="alert alert-success" role="alert">
+      <svg lucideCheck class="alert-icon"></svg>
+      <span>{{ successMessage }}</span>
+      <button type="button" class="alert-close" (click)="successMessage = ''">&times;</button>
+    </div>
+  }
+
+  @if (errorMessage && !showCreateModal && !showEditModal && !showDetailModal && !showConfirmStatusModal) {
+    <div class="alert alert-danger" role="alert">
+      <svg lucideAlertTriangle class="alert-icon"></svg>
+      <span>{{ errorMessage }}</span>
+      <button type="button" class="alert-close" (click)="errorMessage = ''">&times;</button>
+    </div>
+  }
+
+  <!-- Barra de Filtros y Búsqueda -->
+  <section class="filters-card">
+    <div class="search-box">
+      <svg lucideSearch class="search-icon"></svg>
+      <input
+        type="text"
+        class="search-input"
+        placeholder="Buscar paciente por DNI, nombres o apellidos..."
+        [value]="searchTerm"
+        (input)="onSearch($event)"
+      />
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-item">
+        <label for="filtroEstado" class="filter-label">Estado:</label>
+        <select id="filtroEstado" class="filter-select" (change)="onFilterEstado($event)">
+          <option value="TODOS">Todos los estados</option>
+          <option value="ACTIVO">Activos</option>
+          <option value="INACTIVO">Inactivos</option>
+        </select>
+      </div>
+
+      <button type="button" class="btn btn-outline" (click)="cargarPacientes()" title="Recargar lista">
+        <svg lucideRefreshCw class="btn-icon" [class.spinning]="loading"></svg>
+        <span class="refresh-text">Actualizar</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Tabla de Pacientes -->
+  <section class="table-card">
+    @if (loading) {
+      <div class="loading-state">
+        <svg lucideLoaderCircle class="spinner-icon"></svg>
+        <p>Cargando información de pacientes...</p>
+      </div>
+    } @else if (pacientes.length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon-wrap">
+          <svg lucideUsers class="empty-icon"></svg>
+        </div>
+        <h3>No se encontraron pacientes</h3>
+        <p>Intenta ajustar el término de búsqueda o registra un nuevo paciente en el sistema.</p>
+        <button type="button" class="btn btn-secondary" (click)="openCreateModal()">
+          <svg lucideUserPlus class="btn-icon"></svg>
+          <span>Registrar primer paciente</span>
+        </button>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>DNI</th>
+              <th>Paciente</th>
+              <th>Fecha Nac. / Edad</th>
+              <th>Teléfono</th>
+              <th>Correo electrónico</th>
+              <th>Estado</th>
+              <th class="text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of pacientes; track p.idPaciente) {
+              <tr>
+                <td class="font-mono font-semibold text-primary">
+                  {{ p.dni }}
+                </td>
+                <td>
+                  <div class="user-cell">
+                    <span class="avatar-circle">{{ p.nombres.charAt(0).toUpperCase() }}</span>
+                    <div class="user-info-text">
+                      <span class="user-name-strong">{{ p.nombres }} {{ p.apellidos }}</span>
+                      @if (p.sexo) {
+                        <span class="user-subtext">{{ p.sexo }}</span>
+                      }
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="date-age-cell">
+                    <span>{{ p.fechaNacimiento }}</span>
+                    <span class="age-badge">{{ calcularEdad(p.fechaNacimiento) }}</span>
+                  </div>
+                </td>
+                <td>
+                  {{ p.telefono || 'No registrado' }}
+                </td>
+                <td>
+                  {{ p.correo || 'No registrado' }}
+                </td>
+                <td>
+                  <span class="status-badge" [class.active]="p.estado" [class.inactive]="!p.estado">
+                    <span class="status-indicator-dot"></span>
+                    {{ p.estado ? 'Activo' : 'Inactivo' }}
+                  </span>
+                </td>
+                <td class="text-right">
+                  <div class="actions-wrapper">
+                    <!-- Ver detalle e historial -->
+                    <button
+                      type="button"
+                      class="action-btn view-btn"
+                      (click)="openDetailModal(p)"
+                      title="Ver detalle e historial clínico"
+                    >
+                      <svg lucideEye class="action-icon"></svg>
+                    </button>
+
+                    <!-- Editar paciente -->
+                    <button
+                      type="button"
+                      class="action-btn edit-btn"
+                      (click)="openEditModal(p)"
+                      title="Editar datos del paciente"
+                    >
+                      <svg lucidePencil class="action-icon"></svg>
+                    </button>
+
+                    <!-- Activar / Desactivar (solo ADMIN) -->
+                    @if (canManageAdmin()) {
+                      <button
+                        type="button"
+                        class="action-btn"
+                        [class.deactivate-btn]="p.estado"
+                        [class.activate-btn]="!p.estado"
+                        (click)="openConfirmStatusModal(p)"
+                        [title]="p.estado ? 'Desactivar paciente' : 'Activar paciente'"
+                      >
+                        @if (p.estado) {
+                          <svg lucideBan class="action-icon"></svg>
+                        } @else {
+                          <svg lucideCheckCircle class="action-icon"></svg>
+                        }
+                      </button>
+
+                      <!-- Eliminar físicamente (solo ADMIN) -->
+                      <button
+                        type="button"
+                        class="action-btn delete-btn"
+                        (click)="openDeleteModal(p)"
+                        title="Eliminar paciente permanentemente (DELETE)"
+                      >
+                        <svg lucideTrash2 class="action-icon text-danger"></svg>
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="table-footer-info">
+        <span>Mostrando <strong>{{ pacientes.length }}</strong> paciente(s) registrado(s)</span>
+      </div>
+    }
+  </section>
+
+  <!-- ======================================================== -->
+  <!-- MODAL 1: REGISTRAR PACIENTE                              -->
+  <!-- ======================================================== -->
+  @if (showCreateModal) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card modal-lg" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucideUserPlus class="modal-header-icon"></svg>
+            <h2>Registrar nuevo paciente</h2>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        @if (errorMessage) {
+          <div class="modal-alert-error">
+            <svg lucideAlertTriangle class="alert-icon"></svg>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <form [formGroup]="createForm" (ngSubmit)="submitCreate()" class="modal-form">
+          <!-- Sección 1: Datos Personales e Identificación -->
+          <div class="form-section-title">
+            <svg lucideUsers class="section-icon"></svg>
+            <span>Datos Personales y de Identificación</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-4">
+              <label for="createDni" class="form-label">
+                DNI <span class="required">*</span>
+              </label>
+              <input
+                id="createDni"
+                type="text"
+                class="form-control"
+                placeholder="8 dígitos"
+                maxlength="8"
+                formControlName="dni"
+                [class.is-invalid]="createForm.get('dni')?.invalid && createForm.get('dni')?.touched"
+              />
+              @if (createForm.get('dni')?.invalid && createForm.get('dni')?.touched) {
+                <div class="field-error">
+                  @if (createForm.get('dni')?.hasError('required')) {
+                    <span>El DNI es obligatorio.</span>
+                  } @else {
+                    <span>El DNI debe contener exactamente 8 dígitos numéricos.</span>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-4">
+              <label for="createFechaNac" class="form-label">
+                Fecha de nacimiento <span class="required">*</span>
+              </label>
+              <input
+                id="createFechaNac"
+                type="date"
+                class="form-control"
+                [max]="todayDateStr"
+                formControlName="fechaNacimiento"
+                [class.is-invalid]="createForm.get('fechaNacimiento')?.invalid && createForm.get('fechaNacimiento')?.touched"
+              />
+              @if (createForm.get('fechaNacimiento')?.invalid && createForm.get('fechaNacimiento')?.touched) {
+                <div class="field-error">
+                  @if (createForm.get('fechaNacimiento')?.hasError('required')) {
+                    <span>La fecha de nacimiento es obligatoria.</span>
+                  } @else if (createForm.get('fechaNacimiento')?.hasError('futureDate')) {
+                    <span>La fecha no puede ser futura.</span>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-4">
+              <label for="createSexo" class="form-label">
+                Sexo <span class="required">*</span>
+              </label>
+              <select id="createSexo" class="form-select" formControlName="sexo">
+                <option value="MASCULINO">Masculino</option>
+                <option value="FEMENINO">Femenino</option>
+                <option value="OTRO">Otro</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="createNombres" class="form-label">
+                Nombres <span class="required">*</span>
+              </label>
+              <input
+                id="createNombres"
+                type="text"
+                class="form-control"
+                placeholder="Ej. Juan Carlos"
+                formControlName="nombres"
+                [class.is-invalid]="createForm.get('nombres')?.invalid && createForm.get('nombres')?.touched"
+              />
+              @if (createForm.get('nombres')?.invalid && createForm.get('nombres')?.touched) {
+                <div class="field-error">
+                  @if (createForm.get('nombres')?.hasError('required')) {
+                    <span>Los nombres son obligatorios.</span>
+                  } @else if (createForm.get('nombres')?.hasError('pattern')) {
+                    <span>Solo se permiten letras y espacios.</span>
+                  } @else {
+                    <span>Debe tener entre 2 y 100 caracteres.</span>
+                  }
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-6">
+              <label for="createApellidos" class="form-label">
+                Apellidos <span class="required">*</span>
+              </label>
+              <input
+                id="createApellidos"
+                type="text"
+                class="form-control"
+                placeholder="Ej. Pérez Gómez"
+                formControlName="apellidos"
+                [class.is-invalid]="createForm.get('apellidos')?.invalid && createForm.get('apellidos')?.touched"
+              />
+              @if (createForm.get('apellidos')?.invalid && createForm.get('apellidos')?.touched) {
+                <div class="field-error">
+                  @if (createForm.get('apellidos')?.hasError('required')) {
+                    <span>Los apellidos son obligatorios.</span>
+                  } @else if (createForm.get('apellidos')?.hasError('pattern')) {
+                    <span>Solo se permiten letras y espacios.</span>
+                  } @else {
+                    <span>Debe tener entre 2 y 100 caracteres.</span>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Sección 2: Contacto y Ubicación -->
+          <div class="form-section-title">
+            <svg lucidePhone class="section-icon"></svg>
+            <span>Contacto y Domicilio</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="createTelefono" class="form-label">
+                Teléfono de contacto
+              </label>
+              <input
+                id="createTelefono"
+                type="text"
+                class="form-control"
+                placeholder="Ej. 987654321"
+                maxlength="9s"
+                formControlName="telefono"
+                [class.is-invalid]="createForm.get('telefono')?.invalid && createForm.get('telefono')?.touched"
+              />
+              @if (createForm.get('telefono')?.invalid && createForm.get('telefono')?.touched) {
+                <div class="field-error">
+                  <span>Formato de teléfono no válido, debe ser 9 dígitos.</span>
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-6">
+              <label for="createEmail" class="form-label">
+                Correo electrónico
+              </label>
+              <input
+                id="createEmail"
+                type="email"
+                class="form-control"
+                placeholder="paciente@ejemplo.com"
+                formControlName="correo"
+                [class.is-invalid]="createForm.get('correo')?.invalid && createForm.get('correo')?.touched"
+              />
+              @if (createForm.get('correo')?.invalid && createForm.get('correo')?.touched) {
+                <div class="field-error">
+                  <span>Ingresa un correo electrónico válido.</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="createDireccion" class="form-label">
+              Dirección de residencia
+            </label>
+            <input
+              id="createDireccion"
+              type="text"
+              class="form-control"
+              placeholder="Ej. Av. Arequipa 1234, Dpto 401, Lima"
+              formControlName="direccion"
+            />
+          </div>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeModals()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="submitting">
+              @if (submitting) {
+                <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+                <span>Guardando...</span>
+              } @else {
+                <svg lucideCheck class="btn-icon"></svg>
+                <span>Guardar paciente</span>
+              }
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL 2: EDITAR PACIENTE                                 -->
+  <!-- ======================================================== -->
+  @if (showEditModal && selectedPaciente) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card modal-lg" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucidePencil class="modal-header-icon"></svg>
+            <h2>Editar paciente: {{ selectedPaciente.nombres }} {{ selectedPaciente.apellidos }}</h2>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        @if (errorMessage) {
+          <div class="modal-alert-error">
+            <svg lucideAlertTriangle class="alert-icon"></svg>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <form [formGroup]="editForm" (ngSubmit)="submitEdit()" class="modal-form">
+          <div class="form-section-title">
+            <svg lucideUsers class="section-icon"></svg>
+            <span>Datos Personales e Identificación</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-4">
+              <label for="editDni" class="form-label">
+                DNI <span class="required">*</span>
+              </label>
+              <input
+                id="editDni"
+                type="text"
+                class="form-control"
+                maxlength="8"
+                formControlName="dni"
+                [class.is-invalid]="editForm.get('dni')?.invalid && editForm.get('dni')?.touched"
+              />
+              @if (editForm.get('dni')?.invalid && editForm.get('dni')?.touched) {
+                <div class="field-error">
+                  <span>DNI de 8 dígitos obligatorio.</span>
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-4">
+              <label for="editFechaNac" class="form-label">
+                Fecha de nacimiento <span class="required">*</span>
+              </label>
+              <input
+                id="editFechaNac"
+                type="date"
+                class="form-control"
+                [max]="todayDateStr"
+                formControlName="fechaNacimiento"
+                [class.is-invalid]="editForm.get('fechaNacimiento')?.invalid && editForm.get('fechaNacimiento')?.touched"
+              />
+              @if (editForm.get('fechaNacimiento')?.invalid && editForm.get('fechaNacimiento')?.touched) {
+                <div class="field-error">
+                  <span>Fecha de nacimiento válida obligatoria.</span>
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-4">
+              <label for="editSexo" class="form-label">
+                Sexo <span class="required">*</span>
+              </label>
+              <select id="editSexo" class="form-select" formControlName="sexo">
+                <option value="MASCULINO">Masculino</option>
+                <option value="FEMENINO">Femenino</option>
+                <option value="OTRO">Otro</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="editNombres" class="form-label">
+                Nombres <span class="required">*</span>
+              </label>
+              <input
+                id="editNombres"
+                type="text"
+                class="form-control"
+                formControlName="nombres"
+                [class.is-invalid]="editForm.get('nombres')?.invalid && editForm.get('nombres')?.touched"
+              />
+              @if (editForm.get('nombres')?.invalid && editForm.get('nombres')?.touched) {
+                <div class="field-error">
+                  <span>Ingrese nombres válidos (solo letras).</span>
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-6">
+              <label for="editApellidos" class="form-label">
+                Apellidos <span class="required">*</span>
+              </label>
+              <input
+                id="editApellidos"
+                type="text"
+                class="form-control"
+                formControlName="apellidos"
+                [class.is-invalid]="editForm.get('apellidos')?.invalid && editForm.get('apellidos')?.touched"
+              />
+              @if (editForm.get('apellidos')?.invalid && editForm.get('apellidos')?.touched) {
+                <div class="field-error">
+                  <span>Ingrese apellidos válidos (solo letras).</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="form-section-title">
+            <svg lucidePhone class="section-icon"></svg>
+            <span>Contacto y Domicilio</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="editTelefono" class="form-label">
+                Teléfono de contacto
+              </label>
+              <input
+                id="editTelefono"
+                type="text"
+                class="form-control"
+                formControlName="telefono"
+              />
+            </div>
+
+            <div class="form-group col-6">
+              <label for="editEmail" class="form-label">
+                Correo electrónico
+              </label>
+              <input
+                id="editEmail"
+                type="email"
+                class="form-control"
+                formControlName="correo"
+              />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-8">
+              <label for="editDireccion" class="form-label">
+                Dirección
+              </label>
+              <input
+                id="editDireccion"
+                type="text"
+                class="form-control"
+                formControlName="direccion"
+              />
+            </div>
+
+            <div class="form-group col-4">
+              <label for="editEstado" class="form-label">
+                Estado <span class="required">*</span>
+              </label>
+              <select id="editEstado" class="form-select" formControlName="estado">
+                <option [ngValue]="true">Activo</option>
+                <option [ngValue]="false">Inactivo</option>
+              </select>
+            </div>
+          </div>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeModals()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="submitting">
+              @if (submitting) {
+                <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+                <span>Guardando...</span>
+              } @else {
+                <svg lucideCheck class="btn-icon"></svg>
+                <span>Guardar cambios</span>
+              }
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL 3: VER DETALLE E HISTORIAL CLÍNICO                 -->
+  <!-- ======================================================== -->
+  @if (showDetailModal && selectedPaciente) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card modal-lg" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucideClipboardList class="modal-header-icon"></svg>
+            <h2>Ficha e historial del paciente</h2>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        <div class="detail-body">
+          <!-- Tarjeta de Resumen del Paciente -->
+          <div class="patient-summary-box">
+            <div class="patient-avatar-box">
+              <span>{{ selectedPaciente.nombres.charAt(0).toUpperCase() }}</span>
+            </div>
+            <div class="patient-summary-details">
+              <h3 class="patient-name-title">{{ selectedPaciente.nombres }} {{ selectedPaciente.apellidos }}</h3>
+              <div class="patient-meta-tags">
+                <span class="meta-tag"><strong>DNI:</strong> {{ selectedPaciente.dni }}</span>
+                <span class="meta-tag"><strong>Sexo:</strong> {{ selectedPaciente.sexo || 'No especificado' }}</span>
+                <span class="meta-tag"><strong>Edad:</strong> {{ calcularEdad(selectedPaciente.fechaNacimiento) }} ({{ selectedPaciente.fechaNacimiento }})</span>
+                <span class="status-badge" [class.active]="selectedPaciente.estado" [class.inactive]="!selectedPaciente.estado">
+                  <span class="status-indicator-dot"></span>
+                  {{ selectedPaciente.estado ? 'Activo' : 'Inactivo' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Contacto rápido -->
+          <div class="contact-grid">
+            <div class="contact-card">
+              <svg lucidePhone class="contact-icon"></svg>
+              <div>
+                <span class="contact-label">Teléfono:</span>
+                <span class="contact-value">{{ selectedPaciente.telefono || 'No registrado' }}</span>
+              </div>
+            </div>
+            <div class="contact-card">
+              <svg lucideMail class="contact-icon"></svg>
+              <div>
+                <span class="contact-label">Correo:</span>
+                <span class="contact-value">{{ selectedPaciente.correo || 'No registrado' }}</span>
+              </div>
+            </div>
+            <div class="contact-card">
+              <svg lucideMapPin class="contact-icon"></svg>
+              <div>
+                <span class="contact-label">Dirección:</span>
+                <span class="contact-value">{{ selectedPaciente.direccion || 'No registrada' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sección de Historial Clínico de Consultas -->
+          <div class="history-section">
+            <div class="history-header">
+              <div class="history-title-wrap">
+                <svg lucideStethoscope class="history-icon"></svg>
+                <h4>Historial de consultas médicas</h4>
+              </div>
+              <span class="consultas-count-badge">
+                {{ historialConsultas.length }} consulta(s) registrada(s)
+              </span>
+            </div>
+
+            @if (loadingHistory) {
+              <div class="history-loading">
+                <svg lucideLoaderCircle class="spinner-icon"></svg>
+                <span>Cargando historial clínico...</span>
+              </div>
+            } @else if (historialConsultas.length === 0) {
+              <div class="history-empty">
+                <svg lucideClipboardList class="history-empty-icon"></svg>
+                <p>El paciente no tiene consultas médicas registradas en su historial.</p>
+              </div>
+            } @else {
+              <div class="history-timeline">
+                @for (c of historialConsultas; track c.idConsulta) {
+                  <article class="timeline-item">
+                    <div class="timeline-point"></div>
+                    <div class="timeline-content">
+                      <div class="timeline-meta">
+                        <span class="timeline-date">
+                          <svg lucideCalendar class="meta-icon"></svg>
+                          {{ c.fechaConsulta | date:'dd/MM/yyyy HH:mm' }}
+                        </span>
+                        <span class="timeline-doctor">
+                          <svg lucideStethoscope class="meta-icon"></svg>
+                          {{ c.nombreMedico }} ({{ c.especialidadMedico }})
+                        </span>
+                      </div>
+                      <div class="clinical-details">
+                        <div class="clinical-field">
+                          <span class="field-title">Motivo:</span>
+                          <span class="field-desc">{{ c.motivo }}</span>
+                        </div>
+                        <div class="clinical-field">
+                          <span class="field-title">Diagnóstico:</span>
+                          <span class="field-desc font-semibold text-primary">{{ c.diagnostico }}</span>
+                        </div>
+                        @if (c.tratamiento) {
+                          <div class="clinical-field">
+                            <span class="field-title">Tratamiento:</span>
+                            <span class="field-desc">{{ c.tratamiento }}</span>
+                          </div>
+                        }
+                        @if (c.observaciones) {
+                          <div class="clinical-field">
+                            <span class="field-title">Observaciones:</span>
+                            <span class="field-desc text-muted">{{ c.observaciones }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+          </div>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary" (click)="closeModals()">
+              Cerrar ficha
+            </button>
+          </footer>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL 4: CONFIRMACIÓN DE CAMBIO DE ESTADO                -->
+  <!-- ======================================================== -->
+  @if (showConfirmStatusModal && statusTargetPaciente) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card modal-sm" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            @if (statusTargetPaciente.estado) {
+              <svg lucideBan class="modal-header-icon text-danger"></svg>
+              <h2>Desactivar paciente</h2>
+            } @else {
+              <svg lucideCheckCircle class="modal-header-icon text-success"></svg>
+              <h2>Activar paciente</h2>
+            }
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        <div class="confirm-modal-body">
+          <p>
+            ¿Estás seguro de que deseas <strong>{{ statusTargetPaciente.estado ? 'desactivar' : 'activar' }}</strong> al paciente
+            <strong>{{ statusTargetPaciente.nombres }} {{ statusTargetPaciente.apellidos }}</strong> (DNI: {{ statusTargetPaciente.dni }})?
+          </p>
+          @if (statusTargetPaciente.estado) {
+            <p class="confirm-warning">
+              <svg lucideAlertTriangle class="inline-warning-icon"></svg>
+              El paciente ya no estará disponible para nuevas citas activas, pero todo su historial clínico y consultas se mantendrán íntegros.
+            </p>
+          }
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeModals()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="btn"
+              [class.btn-danger]="statusTargetPaciente.estado"
+              [class.btn-primary]="!statusTargetPaciente.estado"
+              (click)="confirmToggleStatus()"
+              [disabled]="submitting"
+            >
+              @if (submitting) {
+                <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+                <span>Procesando...</span>
+              } @else {
+                <span>Sí, {{ statusTargetPaciente.estado ? 'desactivar' : 'activar' }}</span>
+              }
+            </button>
+          </footer>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL DE CONFIRMACIÓN DE ELIMINACIÓN (DELETE HTTP)       -->
+  <!-- ======================================================== -->
+  @if (showDeleteModal && pacienteAEliminar) {
+    <div class="modal-overlay" (click)="closeDeleteModal()">
+      <div class="modal-card modal-confirm modal-danger-tone" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucideAlertTriangle class="modal-icon text-danger"></svg>
+            <h2>Eliminar Paciente</h2>
+          </div>
+          <button type="button" class="close-btn" (click)="closeDeleteModal()" aria-label="Cerrar modal">&times;</button>
+        </header>
+
+        <div class="modal-body">
+          <p class="confirm-message">
+            ¿Está seguro de que desea eliminar permanentemente al paciente
+            <strong>{{ pacienteAEliminar.nombres }} {{ pacienteAEliminar.apellidos }}</strong> (DNI: {{ pacienteAEliminar.dni }})?
+          </p>
+          <p class="confirm-warning">
+            <svg lucideAlertTriangle class="inline-warning-icon"></svg>
+            Esta acción ejecutará una solicitud <strong>DELETE /api/pacientes/{{ pacienteAEliminar.idPaciente }}</strong>.
+            Si el paciente ya cuenta con consultas o citas registradas, la base de datos protegerá la integridad referencial.
+          </p>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeDeleteModal()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="btn btn-danger"
+              (click)="confirmDelete()"
+              [disabled]="submitting"
+            >
+              @if (submitting) {
+                <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+                <span>Eliminando...</span>
+              } @else {
+                <span>Sí, Eliminar</span>
+              }
+            </button>
+          </footer>
+        </div>
+      </div>
+    </div>
+  }
+</div>

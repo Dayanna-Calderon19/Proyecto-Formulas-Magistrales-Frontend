@@ -1,0 +1,915 @@
+<div class="medicos-page">
+  <!-- Cabecera de la sección -->
+  <header class="page-header">
+    <div class="header-info">
+      <h1 class="page-title">Gestión de médicos</h1>
+      <p class="page-description">
+        Administración de profesionales de la salud, credenciales de colegiatura médica, especialidades y vinculación con cuentas de acceso.
+      </p>
+    </div>
+    <div class="header-actions">
+      @if (canManageAdmin()) {
+        <button type="button" class="btn btn-primary" (click)="openCreateModal()">
+          <svg lucideStethoscope class="btn-icon"></svg>
+          <span>Registrar médico</span>
+        </button>
+      }
+    </div>
+  </header>
+
+  <!-- Mensajes de alerta global -->
+  @if (successMessage) {
+    <div class="alert alert-success" role="alert">
+      <svg lucideCheck class="alert-icon"></svg>
+      <span>{{ successMessage }}</span>
+      <button type="button" class="alert-close" (click)="successMessage = ''">&times;</button>
+    </div>
+  }
+
+  @if (errorMessage && !showCreateModal && !showEditModal && !showDetailModal && !showConfirmStatusModal) {
+    <div class="alert alert-danger" role="alert">
+      <svg lucideAlertTriangle class="alert-icon"></svg>
+      <span>{{ errorMessage }}</span>
+      <button type="button" class="alert-close" (click)="errorMessage = ''">&times;</button>
+    </div>
+  }
+
+  <!-- Barra de Filtros y Búsqueda -->
+  <section class="filters-card">
+    <div class="search-box">
+      <svg lucideSearch class="search-icon"></svg>
+      <input
+        type="text"
+        class="search-input"
+        placeholder="Buscar médico por DNI, nombres, apellidos o colegiatura..."
+        [value]="searchTerm"
+        (input)="onSearch($event)"
+      />
+    </div>
+
+    <div class="filter-group">
+      <div class="filter-item">
+        <label for="filtroEsp" class="filter-label">Especialidad:</label>
+        <select id="filtroEsp" class="filter-select" (change)="onFilterEspecialidad($event)">
+          <option value="TODAS">Todas las especialidades</option>
+          @for (esp of especialidades; track esp) {
+            <option [value]="esp">{{ esp }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="filtroEstado" class="filter-label">Estado:</label>
+        <select id="filtroEstado" class="filter-select" (change)="onFilterEstado($event)">
+          <option value="TODOS">Todos los estados</option>
+          <option value="ACTIVO">Activos</option>
+          <option value="INACTIVO">Inactivos</option>
+        </select>
+      </div>
+
+      <button type="button" class="btn btn-outline" (click)="cargarMedicos()" title="Recargar lista">
+        <svg lucideRefreshCw class="btn-icon" [class.spinning]="loading"></svg>
+        <span class="refresh-text">Actualizar</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Tabla de Médicos -->
+  <section class="table-card">
+    @if (loading) {
+      <div class="loading-state">
+        <svg lucideLoaderCircle class="spinner-icon"></svg>
+        <p>Cargando lista de profesionales médicos...</p>
+      </div>
+    } @else if (medicos.length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon-wrap">
+          <svg lucideStethoscope class="empty-icon"></svg>
+        </div>
+        <h3>No se encontraron médicos</h3>
+        <p>Intenta ajustar los filtros de búsqueda o registra a un nuevo profesional médico.</p>
+        @if (canManageAdmin()) {
+          <button type="button" class="btn btn-secondary" (click)="openCreateModal()">
+            <svg lucideUserPlus class="btn-icon"></svg>
+            <span>Registrar primer médico</span>
+          </button>
+        }
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>DNI</th>
+              <th>Médico</th>
+              <th>Colegiatura</th>
+              <th>Especialidad</th>
+              <th>Contacto</th>
+              <th>Cuenta vinculada</th>
+              <th>Estado</th>
+              <th class="text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (m of medicos; track m.idMedico) {
+              <tr>
+                <td class="font-mono font-semibold text-primary">
+                  {{ m.dni }}
+                </td>
+                <td>
+                  <div class="user-cell">
+                    <span class="avatar-circle doctor-avatar">{{ m.nombres.charAt(0).toUpperCase() }}</span>
+                    <div class="user-info-text">
+                      <span class="user-name-strong">Dr.(a) {{ m.nombres }} {{ m.apellidos }}</span>
+                      <span class="user-subtext">{{ m.especialidad }}</span>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="colegiatura-tag">
+                    <svg lucideAward class="tag-icon"></svg>
+                    {{ m.colegiatura }}
+                  </span>
+                </td>
+                <td>
+                  <span class="specialty-badge">{{ m.especialidad }}</span>
+                </td>
+                <td>
+                  <div class="contact-compact">
+                    @if (m.telefono) {
+                      <span class="contact-line">
+                        <svg lucidePhone class="compact-icon"></svg>
+                        {{ m.telefono }}
+                      </span>
+                    }
+                    @if (m.correo) {
+                      <span class="contact-line">
+                        <svg lucideMail class="compact-icon"></svg>
+                        {{ m.correo }}
+                      </span>
+                    }
+                    @if (!m.telefono && !m.correo) {
+                      <span class="text-muted">No registrado</span>
+                    }
+                  </div>
+                </td>
+                <td>
+                  @if (m.username) {
+                    <div class="user-linked-pill" [title]="'Cuenta asociada: ' + m.username">
+                      <svg lucideUserCheck class="linked-icon"></svg>
+                      <div class="linked-text-wrap">
+                        <span class="linked-username">{{ m.username }}</span>
+                        @if (m.usuarioActivo !== undefined) {
+                          <span class="linked-user-status" [class.status-active]="m.usuarioActivo" [class.status-inactive]="!m.usuarioActivo">
+                            {{ m.usuarioActivo ? 'Cuenta activa' : 'Cuenta inactiva' }}
+                          </span>
+                        }
+                      </div>
+                    </div>
+                  } @else {
+                    <span class="unlinked-tag">
+                      <svg lucideUserX class="unlinked-icon"></svg>
+                      Sin cuenta
+                    </span>
+                  }
+                </td>
+                <td>
+                  <span class="status-badge" [class.active]="m.estado" [class.inactive]="!m.estado">
+                    <span class="status-indicator-dot"></span>
+                    {{ m.estado ? 'Activo' : 'Inactivo' }}
+                  </span>
+                </td>
+                <td class="text-right">
+                  <div class="actions-wrapper">
+                    <!-- Ver detalle e historial -->
+                    <button
+                      type="button"
+                      class="action-btn view-btn"
+                      (click)="openDetailModal(m)"
+                      title="Ver detalle de médico y consultas atendidas"
+                    >
+                      <svg lucideEye class="action-icon"></svg>
+                    </button>
+
+                    <!-- Editar (solo ADMIN) -->
+                    @if (canManageAdmin()) {
+                      <button
+                        type="button"
+                        class="action-btn edit-btn"
+                        (click)="openEditModal(m)"
+                        title="Editar datos del médico"
+                      >
+                        <svg lucidePencil class="action-icon"></svg>
+                      </button>
+
+                      <!-- Activar / Desactivar (solo ADMIN) -->
+                      <button
+                        type="button"
+                        class="action-btn"
+                        [class.deactivate-btn]="m.estado"
+                        [class.activate-btn]="!m.estado"
+                        (click)="openConfirmStatusModal(m)"
+                        [title]="m.estado ? 'Desactivar médico' : 'Activar médico'"
+                      >
+                        @if (m.estado) {
+                          <svg lucideBan class="action-icon"></svg>
+                        } @else {
+                          <svg lucideCheckCircle class="action-icon"></svg>
+                        }
+                      </button>
+
+                      <!-- Eliminar físicamente (solo ADMIN) -->
+                      <button
+                        type="button"
+                        class="action-btn delete-btn"
+                        (click)="openDeleteModal(m)"
+                        title="Eliminar médico permanentemente (DELETE)"
+                      >
+                        <svg lucideTrash2 class="action-icon text-danger"></svg>
+                      </button>
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <div class="table-footer-info">
+        <span>Mostrando <strong>{{ medicos.length }}</strong> médico(s) registrado(s)</span>
+      </div>
+    }
+  </section>
+
+  <!-- ======================================================== -->
+  <!-- MODAL 1: REGISTRAR MÉDICO                                -->
+  <!-- ======================================================== -->
+  @if (showCreateModal) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card modal-lg" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucideStethoscope class="modal-header-icon"></svg>
+            <h2>Registrar nuevo médico</h2>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        @if (errorMessage) {
+          <div class="modal-alert-error">
+            <svg lucideAlertTriangle class="alert-icon"></svg>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <form [formGroup]="createForm" (ngSubmit)="submitCreate()" class="modal-form">
+          <!-- Sección 1: Datos Profesionales -->
+          <div class="form-section-title">
+            <svg lucideAward class="section-icon"></svg>
+            <span>Datos Profesionales y de Colegiatura</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="createEspecialidad" class="form-label">
+                Especialidad médica <span class="required">*</span>
+              </label>
+              <input
+                id="createEspecialidad"
+                type="text"
+                class="form-control"
+                placeholder="Ej. Medicina General, Pediatría, Dermatología"
+                formControlName="especialidad"
+                [class.is-invalid]="createForm.get('especialidad')?.invalid && createForm.get('especialidad')?.touched"
+              />
+              @if (createForm.get('especialidad')?.invalid && createForm.get('especialidad')?.touched) {
+                <div class="field-error">
+                  <span>La especialidad es obligatoria (mínimo 2 caracteres).</span>
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-6">
+              <label for="createColegiatura" class="form-label">
+                Número de colegiatura (CMP) <span class="required">*</span>
+              </label>
+              <input
+                id="createColegiatura"
+                type="text"
+                class="form-control"
+                placeholder="Ej. CMP-45892 o 45892"
+                formControlName="colegiatura"
+                [class.is-invalid]="createForm.get('colegiatura')?.invalid && createForm.get('colegiatura')?.touched"
+              />
+              @if (createForm.get('colegiatura')?.invalid && createForm.get('colegiatura')?.touched) {
+                <div class="field-error">
+                  <span>La colegiatura es obligatoria (letras, números y guiones).</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Sección 2: Datos Personales -->
+          <div class="form-section-title">
+            <svg lucideUsers class="section-icon"></svg>
+            <span>Datos Personales</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-4">
+              <label for="createMedDni" class="form-label">
+                DNI <span class="required">*</span>
+              </label>
+              <input
+                id="createMedDni"
+                type="text"
+                class="form-control"
+                placeholder="8 dígitos"
+                maxlength="8"
+                formControlName="dni"
+                [class.is-invalid]="createForm.get('dni')?.invalid && createForm.get('dni')?.touched"
+              />
+              @if (createForm.get('dni')?.invalid && createForm.get('dni')?.touched) {
+                <div class="field-error">
+                  <span>DNI de 8 dígitos numéricos obligatorio.</span>
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-4">
+              <label for="createMedNombres" class="form-label">
+                Nombres <span class="required">*</span>
+              </label>
+              <input
+                id="createMedNombres"
+                type="text"
+                class="form-control"
+                placeholder="Ej. Carlos Alberto"
+                formControlName="nombres"
+                [class.is-invalid]="createForm.get('nombres')?.invalid && createForm.get('nombres')?.touched"
+              />
+              @if (createForm.get('nombres')?.invalid && createForm.get('nombres')?.touched) {
+                <div class="field-error">
+                  <span>Ingrese nombres válidos (solo letras).</span>
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-4">
+              <label for="createMedApellidos" class="form-label">
+                Apellidos <span class="required">*</span>
+              </label>
+              <input
+                id="createMedApellidos"
+                type="text"
+                class="form-control"
+                placeholder="Ej. Mendoza Rojas"
+                formControlName="apellidos"
+                [class.is-invalid]="createForm.get('apellidos')?.invalid && createForm.get('apellidos')?.touched"
+              />
+              @if (createForm.get('apellidos')?.invalid && createForm.get('apellidos')?.touched) {
+                <div class="field-error">
+                  <span>Ingrese apellidos válidos (solo letras).</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Sección 3: Contacto -->
+          <div class="form-section-title">
+            <svg lucidePhone class="section-icon"></svg>
+            <span>Contacto Profesional</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="createMedTelefono" class="form-label">
+                Teléfono
+              </label>
+              <input
+                id="createMedTelefono"
+                type="text"
+                class="form-control"
+                placeholder="Ej. 998877665 o +51 998877665"
+                formControlName="telefono"
+              />
+            </div>
+
+            <div class="form-group col-6">
+              <label for="createMedEmail" class="form-label">
+                Correo institucional o personal
+              </label>
+              <input
+                id="createMedEmail"
+                type="email"
+                class="form-control"
+                placeholder="medico@clinica.pe"
+                formControlName="correo"
+                [class.is-invalid]="createForm.get('correo')?.invalid && createForm.get('correo')?.touched"
+              />
+              @if (createForm.get('correo')?.invalid && createForm.get('correo')?.touched) {
+                <div class="field-error">
+                  <span>Ingrese un correo electrónico válido.</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Sección 4: Vinculación con Usuario -->
+          <div class="form-section-title">
+            <svg lucideUserCheck class="section-icon"></svg>
+            <span>Vinculación con Cuenta de Usuario</span>
+          </div>
+
+          <div class="form-group">
+            <label for="createMedUsuario" class="form-label">
+              Cuenta de usuario con rol MEDICO
+            </label>
+            <select id="createMedUsuario" class="form-select" formControlName="idUsuario">
+              <option [ngValue]="null">-- Sin vincular por ahora (asignar más tarde) --</option>
+              @for (u of usuariosDisponibles; track u.idUsuario) {
+                <option [ngValue]="u.idUsuario">
+                  {{ u.username }} ({{ u.nombreCompleto || u.correo || 'ID #' + u.idUsuario }})
+                </option>
+              }
+            </select>
+            <p class="field-hint">
+              Solo se muestran cuentas activas con rol MEDICO que no estén asignadas a otro profesional. Las cuentas se gestionan en el módulo de Usuarios y Roles.
+            </p>
+          </div>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeModals()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="submitting">
+              @if (submitting) {
+                <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+                <span>Guardando...</span>
+              } @else {
+                <svg lucideCheck class="btn-icon"></svg>
+                <span>Registrar médico</span>
+              }
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL 2: EDITAR MÉDICO                                   -->
+  <!-- ======================================================== -->
+  @if (showEditModal && selectedMedico) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card modal-lg" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucidePencil class="modal-header-icon"></svg>
+            <h2>Editar médico: Dr.(a) {{ selectedMedico.nombres }} {{ selectedMedico.apellidos }}</h2>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        @if (errorMessage) {
+          <div class="modal-alert-error">
+            <svg lucideAlertTriangle class="alert-icon"></svg>
+            <span>{{ errorMessage }}</span>
+          </div>
+        }
+
+        <form [formGroup]="editForm" (ngSubmit)="submitEdit()" class="modal-form">
+          <div class="form-section-title">
+            <svg lucideAward class="section-icon"></svg>
+            <span>Datos Profesionales</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-6">
+              <label for="editEspecialidad" class="form-label">
+                Especialidad <span class="required">*</span>
+              </label>
+              <input
+                id="editEspecialidad"
+                type="text"
+                class="form-control"
+                formControlName="especialidad"
+                [class.is-invalid]="editForm.get('especialidad')?.invalid && editForm.get('especialidad')?.touched"
+              />
+              @if (editForm.get('especialidad')?.invalid && editForm.get('especialidad')?.touched) {
+                <div class="field-error">
+                  <span>La especialidad es obligatoria.</span>
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-6">
+              <label for="editColegiatura" class="form-label">
+                Colegiatura (CMP) <span class="required">*</span>
+              </label>
+              <input
+                id="editColegiatura"
+                type="text"
+                class="form-control"
+                formControlName="colegiatura"
+                [class.is-invalid]="editForm.get('colegiatura')?.invalid && editForm.get('colegiatura')?.touched"
+              />
+              @if (editForm.get('colegiatura')?.invalid && editForm.get('colegiatura')?.touched) {
+                <div class="field-error">
+                  <span>La colegiatura es obligatoria.</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <div class="form-section-title">
+            <svg lucideUsers class="section-icon"></svg>
+            <span>Datos Personales</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-4">
+              <label for="editMedDni" class="form-label">
+                DNI <span class="required">*</span>
+              </label>
+              <input
+                id="editMedDni"
+                type="text"
+                class="form-control"
+                maxlength="8"
+                formControlName="dni"
+                [class.is-invalid]="editForm.get('dni')?.invalid && editForm.get('dni')?.touched"
+              />
+              @if (editForm.get('dni')?.invalid && editForm.get('dni')?.touched) {
+                <div class="field-error">
+                  <span>DNI de 8 dígitos obligatorio.</span>
+                </div>
+              }
+            </div>
+
+            <div class="form-group col-4">
+              <label for="editMedNombres" class="form-label">
+                Nombres <span class="required">*</span>
+              </label>
+              <input
+                id="editMedNombres"
+                type="text"
+                class="form-control"
+                formControlName="nombres"
+                [class.is-invalid]="editForm.get('nombres')?.invalid && editForm.get('nombres')?.touched"
+              />
+            </div>
+
+            <div class="form-group col-4">
+              <label for="editMedApellidos" class="form-label">
+                Apellidos <span class="required">*</span>
+              </label>
+              <input
+                id="editMedApellidos"
+                type="text"
+                class="form-control"
+                formControlName="apellidos"
+                [class.is-invalid]="editForm.get('apellidos')?.invalid && editForm.get('apellidos')?.touched"
+              />
+            </div>
+          </div>
+
+          <div class="form-section-title">
+            <svg lucidePhone class="section-icon"></svg>
+            <span>Contacto y Estado</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-4">
+              <label for="editMedTelefono" class="form-label">
+                Teléfono
+              </label>
+              <input
+                id="editMedTelefono"
+                type="text"
+                class="form-control"
+                formControlName="telefono"
+              />
+            </div>
+
+            <div class="form-group col-4">
+              <label for="editMedEmail" class="form-label">
+                Correo electrónico
+              </label>
+              <input
+                id="editMedEmail"
+                type="email"
+                class="form-control"
+                formControlName="correo"
+              />
+            </div>
+
+            <div class="form-group col-4">
+              <label for="editMedEstado" class="form-label">
+                Estado <span class="required">*</span>
+              </label>
+              <select id="editMedEstado" class="form-select" formControlName="estado">
+                <option [ngValue]="true">Activo</option>
+                <option [ngValue]="false">Inactivo</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Vinculación de usuario -->
+          <div class="form-section-title">
+            <svg lucideUserCheck class="section-icon"></svg>
+            <span>Cuenta de Usuario Asociada</span>
+          </div>
+
+          <div class="linked-user-edit-box">
+            @if (selectedMedico.idUsuario) {
+              <div class="current-user-info">
+                <span class="info-title">Usuario vinculado actualmente:</span>
+                <span class="info-username">{{ selectedMedico.username }}</span>
+                @if (selectedMedico.nombreCompletoUsuario) {
+                  <span class="info-fullname">({{ selectedMedico.nombreCompletoUsuario }})</span>
+                }
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm text-danger"
+                  (click)="desvincularCuentaUsuario()"
+                  title="Desvincular usuario de la ficha médica"
+                >
+                  <svg lucideUserX class="btn-icon"></svg>
+                  <span>Desvincular cuenta</span>
+                </button>
+              </div>
+            } @else {
+              <p class="text-muted">Este médico actualmente no tiene ninguna cuenta de usuario vinculada.</p>
+            }
+
+            <div class="form-group mt-2">
+              <label for="editMedUsuario" class="form-label">
+                Cambiar o asignar cuenta con rol MEDICO:
+              </label>
+              <select id="editMedUsuario" class="form-select" formControlName="idUsuario">
+                <option [ngValue]="null">-- Mantener actual o sin vincular --</option>
+                @for (u of usuariosDisponibles; track u.idUsuario) {
+                  <option [ngValue]="u.idUsuario">
+                    {{ u.username }} ({{ u.nombreCompleto || u.correo || 'ID #' + u.idUsuario }})
+                  </option>
+                }
+              </select>
+            </div>
+          </div>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeModals()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="submitting">
+              @if (submitting) {
+                <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+                <span>Guardando...</span>
+              } @else {
+                <svg lucideCheck class="btn-icon"></svg>
+                <span>Guardar cambios</span>
+              }
+            </button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL 3: VER DETALLE DEL MÉDICO E HISTORIAL ASISTENCIAL  -->
+  <!-- ======================================================== -->
+  @if (showDetailModal && selectedMedico) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card modal-lg" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucideStethoscope class="modal-header-icon"></svg>
+            <h2>Ficha profesional del médico</h2>
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        <div class="detail-body">
+          <!-- Resumen del Médico -->
+          <div class="doctor-summary-box">
+            <div class="doctor-avatar-box">
+              <span>{{ selectedMedico.nombres.charAt(0).toUpperCase() }}</span>
+            </div>
+            <div class="doctor-summary-details">
+              <h3 class="doctor-name-title">Dr.(a) {{ selectedMedico.nombres }} {{ selectedMedico.apellidos }}</h3>
+              <div class="doctor-meta-tags">
+                <span class="meta-tag"><strong>Especialidad:</strong> {{ selectedMedico.especialidad }}</span>
+                <span class="meta-tag"><strong>Colegiatura:</strong> {{ selectedMedico.colegiatura }}</span>
+                <span class="meta-tag"><strong>DNI:</strong> {{ selectedMedico.dni }}</span>
+                <span class="status-badge" [class.active]="selectedMedico.estado" [class.inactive]="!selectedMedico.estado">
+                  <span class="status-indicator-dot"></span>
+                  {{ selectedMedico.estado ? 'Activo' : 'Inactivo' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tarjetas de Información -->
+          <div class="contact-grid">
+            <div class="contact-card">
+              <svg lucidePhone class="contact-icon"></svg>
+              <div>
+                <span class="contact-label">Teléfono:</span>
+                <span class="contact-value">{{ selectedMedico.telefono || 'No registrado' }}</span>
+              </div>
+            </div>
+            <div class="contact-card">
+              <svg lucideMail class="contact-icon"></svg>
+              <div>
+                <span class="contact-label">Correo:</span>
+                <span class="contact-value">{{ selectedMedico.correo || 'No registrado' }}</span>
+              </div>
+            </div>
+            <div class="contact-card">
+              <svg lucideUserCheck class="contact-icon"></svg>
+              <div>
+                <span class="contact-label">Cuenta vinculada:</span>
+                <span class="contact-value font-semibold">
+                  {{ selectedMedico.username ? selectedMedico.username : 'Sin cuenta' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Historial de consultas atendidas -->
+          <div class="history-section">
+            <div class="history-header">
+              <div class="history-title-wrap">
+                <svg lucideClipboardList class="history-icon"></svg>
+                <h4>Consultas médicas atendidas</h4>
+              </div>
+              <span class="consultas-count-badge">
+                {{ consultasAtendidas.length }} consulta(s) atendida(s)
+              </span>
+            </div>
+
+            @if (loadingHistory) {
+              <div class="history-loading">
+                <svg lucideLoaderCircle class="spinner-icon"></svg>
+                <span>Cargando consultas atendidas...</span>
+              </div>
+            } @else if (consultasAtendidas.length === 0) {
+              <div class="history-empty">
+                <svg lucideClipboardList class="history-empty-icon"></svg>
+                <p>No se registran consultas atendidas por este profesional aún.</p>
+              </div>
+            } @else {
+              <div class="history-timeline">
+                @for (c of consultasAtendidas; track c.idConsulta) {
+                  <article class="timeline-item">
+                    <div class="timeline-point"></div>
+                    <div class="timeline-content">
+                      <div class="timeline-meta">
+                        <span class="timeline-date">
+                          <svg lucideCalendar class="meta-icon"></svg>
+                          {{ c.fechaConsulta | date:'dd/MM/yyyy HH:mm' }}
+                        </span>
+                        <span class="timeline-doctor">
+                          <svg lucideUsers class="meta-icon"></svg>
+                          Paciente: {{ c.nombrePaciente }} (DNI: {{ c.dniPaciente }})
+                        </span>
+                      </div>
+                      <div class="clinical-details">
+                        <div class="clinical-field">
+                          <span class="field-title">Motivo:</span>
+                          <span class="field-desc">{{ c.motivo }}</span>
+                        </div>
+                        <div class="clinical-field">
+                          <span class="field-title">Diagnóstico:</span>
+                          <span class="field-desc font-semibold text-primary">{{ c.diagnostico }}</span>
+                        </div>
+                        @if (c.tratamiento) {
+                          <div class="clinical-field">
+                            <span class="field-title">Tratamiento:</span>
+                            <span class="field-desc">{{ c.tratamiento }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  </article>
+                }
+              </div>
+            }
+          </div>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-secondary" (click)="closeModals()">
+              Cerrar ficha
+            </button>
+          </footer>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL 4: CONFIRMACIÓN DE CAMBIO DE ESTADO (MÉDICO)       -->
+  <!-- ======================================================== -->
+  @if (showConfirmStatusModal && statusTargetMedico) {
+    <div class="modal-backdrop" (click)="closeModals()">
+      <div class="modal-card modal-sm" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            @if (statusTargetMedico.estado) {
+              <svg lucideBan class="modal-header-icon text-danger"></svg>
+              <h2>Desactivar médico</h2>
+            } @else {
+              <svg lucideCheckCircle class="modal-header-icon text-success"></svg>
+              <h2>Activar médico</h2>
+            }
+          </div>
+          <button type="button" class="modal-close-btn" (click)="closeModals()" aria-label="Cerrar">&times;</button>
+        </header>
+
+        <div class="confirm-modal-body">
+          <p>
+            ¿Estás seguro de que deseas <strong>{{ statusTargetMedico.estado ? 'desactivar' : 'activar' }}</strong> al médico
+            <strong>Dr.(a) {{ statusTargetMedico.nombres }} {{ statusTargetMedico.apellidos }}</strong> (CMP: {{ statusTargetMedico.colegiatura }})?
+          </p>
+          @if (statusTargetMedico.estado) {
+            <p class="confirm-warning">
+              <svg lucideAlertTriangle class="inline-warning-icon"></svg>
+              El médico ya no estará disponible para nuevas asignaciones de turnos ni consultas activas. Todas las consultas y recetas históricas emitidas permanecerán registradas e inalteradas.
+            </p>
+          }
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeModals()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="btn"
+              [class.btn-danger]="statusTargetMedico.estado"
+              [class.btn-primary]="!statusTargetMedico.estado"
+              (click)="confirmToggleStatus()"
+              [disabled]="submitting"
+            >
+              @if (submitting) {
+                <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+                <span>Procesando...</span>
+              } @else {
+                <span>Sí, {{ statusTargetMedico.estado ? 'desactivar' : 'activar' }}</span>
+              }
+            </button>
+          </footer>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- ======================================================== -->
+  <!-- MODAL DE CONFIRMACIÓN DE ELIMINACIÓN (DELETE HTTP)       -->
+  <!-- ======================================================== -->
+  @if (showDeleteModal && medicoAEliminar) {
+    <div class="modal-overlay" (click)="closeDeleteModal()">
+      <div class="modal-card modal-confirm modal-danger-tone" (click)="$event.stopPropagation()">
+        <header class="modal-header">
+          <div class="modal-title-wrap">
+            <svg lucideAlertTriangle class="modal-icon text-danger"></svg>
+            <h2>Eliminar Médico</h2>
+          </div>
+          <button type="button" class="close-btn" (click)="closeDeleteModal()" aria-label="Cerrar modal">&times;</button>
+        </header>
+
+        <div class="modal-body">
+          <p class="confirm-message">
+            ¿Está seguro de que desea eliminar permanentemente al médico
+            <strong>Dr.(a) {{ medicoAEliminar.nombres }} {{ medicoAEliminar.apellidos }}</strong> (Colegiatura: {{ medicoAEliminar.colegiatura }})?
+          </p>
+          <p class="confirm-warning">
+            <svg lucideAlertTriangle class="inline-warning-icon"></svg>
+            Esta acción ejecutará una solicitud <strong>DELETE /api/medicos/{{ medicoAEliminar.idMedico }}</strong>.
+            Si el médico tiene consultas o citas asignadas en el historial clínico, la base de datos protegerá la integridad referencial.
+          </p>
+
+          <footer class="modal-footer">
+            <button type="button" class="btn btn-outline" (click)="closeDeleteModal()" [disabled]="submitting">
+              Cancelar
+            </button>
+            <button
+              type="button"
+              class="btn btn-danger"
+              (click)="confirmDelete()"
+              [disabled]="submitting"
+            >
+              @if (submitting) {
+                <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+                <span>Eliminando...</span>
+              } @else {
+                <span>Sí, Eliminar</span>
+              }
+            </button>
+          </footer>
+        </div>
+      </div>
+    </div>
+  }
+</div>
