@@ -1,0 +1,1204 @@
+<div class="formulas-page">
+  <!-- Cabecera de la página -->
+  <header class="page-header">
+    <div class="header-info">
+      <div class="title-with-icon">
+        <div class="header-icon-wrapper">
+          <svg lucideFlaskConical class="header-icon"></svg>
+        </div>
+        <div>
+          <h1 class="page-title">Gestión de fórmulas magistrales</h1>
+          <p class="page-description">
+            Administre las fórmulas magistrales prescritas en consultas médicas, especificando composición, dosificación, unidades y control clínico del paciente.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <!-- Estadísticas rápidas -->
+      <div class="stats-pills">
+        <div class="stat-pill">
+          <span class="stat-label">Total:</span>
+          <span class="stat-value">{{ totalFormulas }}</span>
+        </div>
+        <div class="stat-pill active-pill">
+          <span class="stat-label">Activas:</span>
+          <span class="stat-value">{{ totalActivas }}</span>
+        </div>
+      </div>
+
+      <!-- Botón Registrar si tiene rol autorizado -->
+      <button
+        *ngIf="canManage()"
+        class="btn btn-primary"
+        (click)="abrirModalCrear()"
+        type="button"
+        id="btn-nueva-formula"
+      >
+        <svg lucidePlus class="btn-icon"></svg>
+        <span>Registrar fórmula magistral</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mensajes de Notificación -->
+  <div *ngIf="successMessage" class="alert alert-success" role="alert">
+    <svg lucideCheckCircle class="alert-icon"></svg>
+    <span>{{ successMessage }}</span>
+    <button class="alert-close" (click)="limpiarMensajes()" aria-label="Cerrar">&times;</button>
+  </div>
+
+  <div *ngIf="errorMessage" class="alert alert-danger" role="alert">
+    <svg lucideAlertTriangle class="alert-icon"></svg>
+    <span>{{ errorMessage }}</span>
+    <button class="alert-close" (click)="limpiarMensajes()" aria-label="Cerrar">&times;</button>
+  </div>
+
+  <!-- Barra de Filtros y Búsqueda -->
+  <section class="filters-card">
+    <div class="filters-grid">
+      <!-- Búsqueda en vivo -->
+      <div class="search-box">
+        <svg lucideSearch class="search-icon"></svg>
+        <input
+          type="text"
+          class="form-control search-input"
+          placeholder="Buscar por fórmula, composición, paciente o médico..."
+          [(ngModel)]="searchTerm"
+          (input)="onSearchChange()"
+          id="input-busqueda-formulas"
+        />
+        <button
+          *ngIf="searchTerm"
+          class="search-clear-btn"
+          (click)="searchTerm = ''; onSearchChange()"
+          type="button"
+        >
+          &times;
+        </button>
+      </div>
+
+      <!-- Filtro por Estado -->
+      <div class="filter-group">
+        <label for="filtro-estado" class="filter-label">Estado:</label>
+        <select
+          id="filtro-estado"
+          class="form-control select-control"
+          [value]="filtroEstado"
+          (change)="onFiltroEstadoChange($any($event.target).value)"
+        >
+          <option value="TODOS">Todos los estados</option>
+          <option value="ACTIVO">Activo</option>
+          <option value="EN_PREPARACION">En preparación</option>
+          <option value="DISPENSADA">Dispensada</option>
+          <option value="INACTIVO">Inactivo</option>
+          <option value="ANULADA">Anulada</option>
+        </select>
+      </div>
+
+      <!-- Filtro por Fecha de Preparación Desde -->
+      <div class="filter-group">
+        <label for="filtro-desde" class="filter-label">Desde:</label>
+        <input
+          type="date"
+          id="filtro-desde"
+          class="form-control date-control"
+          [(ngModel)]="filtroFechaDesde"
+          (change)="cargarFormulas()"
+        />
+      </div>
+
+      <!-- Filtro por Fecha de Preparación Hasta -->
+      <div class="filter-group">
+        <label for="filtro-hasta" class="filter-label">Hasta:</label>
+        <input
+          type="date"
+          id="filtro-hasta"
+          class="form-control date-control"
+          [(ngModel)]="filtroFechaHasta"
+          (change)="cargarFormulas()"
+        />
+      </div>
+
+      <!-- Botón de limpieza de filtros -->
+      <div class="filter-actions">
+        <button
+          type="button"
+          class="btn btn-outline btn-sm"
+          (click)="limpiarFiltros()"
+          title="Restablecer filtros"
+        >
+          <svg lucideRefreshCw class="btn-icon-sm"></svg>
+          <span>Limpiar</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tabla de Fórmulas Magistrales -->
+  <section class="table-container">
+    <!-- Estado de Carga -->
+    <div *ngIf="loading" class="loading-state">
+      <svg lucideLoaderCircle class="spinner-icon"></svg>
+      <p>Cargando fórmulas magistrales del sistema...</p>
+    </div>
+
+    <!-- Estado Vacío -->
+    <div *ngIf="!loading && formulas.length === 0" class="empty-state">
+      <div class="empty-icon-wrapper">
+        <svg lucideFlaskConical class="empty-icon"></svg>
+      </div>
+      <h3>No se encontraron fórmulas magistrales</h3>
+      <p>
+        No hay registros que coincidan con los criterios de búsqueda o filtros aplicados.
+      </p>
+      <button
+        *ngIf="searchTerm || filtroEstado !== 'TODOS' || filtroFechaDesde || filtroFechaHasta"
+        type="button"
+        class="btn btn-outline"
+        (click)="limpiarFiltros()"
+      >
+        <svg lucideRefreshCw class="btn-icon"></svg>
+        <span>Restablecer filtros</span>
+      </button>
+      <button
+        *ngIf="canManage() && !searchTerm && filtroEstado === 'TODOS'"
+        type="button"
+        class="btn btn-primary"
+        (click)="abrirModalCrear()"
+      >
+        <svg lucidePlus class="btn-icon"></svg>
+        <span>Registrar la primera fórmula</span>
+      </button>
+    </div>
+
+    <!-- Tabla con datos -->
+    <div *ngIf="!loading && formulas.length > 0" class="table-responsive">
+      <table class="data-table" id="tabla-formulas-magistrales">
+        <thead>
+          <tr>
+            <th class="col-id">#ID</th>
+            <th>Fórmula y Descripción</th>
+            <th>Composición / Ingredientes</th>
+            <th>Cantidad</th>
+            <th>Vigencia</th>
+            <th>Paciente / Médico</th>
+            <th>Estado</th>
+            <th class="col-actions">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let formula of formulas" [class.row-inactive]="formula.estado === 'INACTIVO' || formula.estado === 'ANULADA'">
+            <!-- ID -->
+            <td class="col-id">
+              <span class="id-badge">#{{ formula.id }}</span>
+            </td>
+
+            <!-- Nombre y Descripción -->
+            <td>
+              <div class="formula-name-cell">
+                <span class="formula-title">{{ formula.nombre }}</span>
+                <span *ngIf="formula.descripcion" class="formula-desc-sub">{{ formula.descripcion }}</span>
+              </div>
+            </td>
+
+            <!-- Composición -->
+            <td>
+              <div class="composition-cell" title="{{ formula.composicion }}">
+                <span class="composition-text">{{ formula.composicion }}</span>
+              </div>
+            </td>
+
+            <!-- Cantidad y Unidad -->
+            <td>
+              <div class="quantity-badge">
+                <strong>{{ formula.cantidad }}</strong>
+                <span>{{ formula.unidad }}</span>
+              </div>
+            </td>
+
+            <!-- Fechas de Vigencia -->
+            <td>
+              <div class="dates-cell">
+                <div class="date-item">
+                  <span class="date-lbl">Prep:</span>
+                  <span class="date-val">{{ formula.fechaPreparacion | date:'dd/MM/yyyy' }}</span>
+                </div>
+                <div class="date-item">
+                  <span class="date-lbl">Venc:</span>
+                  <span
+                    class="date-val"
+                    [class.text-danger]="estaVencida(formula.fechaVencimiento)"
+                    [class.text-warning]="proximaAVencer(formula.fechaVencimiento)"
+                  >
+                    {{ formula.fechaVencimiento | date:'dd/MM/yyyy' }}
+                  </span>
+                  <span *ngIf="estaVencida(formula.fechaVencimiento)" class="badge-mini badge-danger">Vencida</span>
+                  <span *ngIf="proximaAVencer(formula.fechaVencimiento)" class="badge-mini badge-warning">Próxima</span>
+                </div>
+              </div>
+            </td>
+
+            <!-- Paciente / Médico Asistencial -->
+            <td>
+              <div class="clinical-rel-cell" *ngIf="formula.nombrePaciente || formula.nombreMedico; else noConsulta">
+                <div class="rel-row" *ngIf="formula.nombrePaciente">
+                  <svg lucideClipboardList class="rel-icon"></svg>
+                  <span class="rel-name">{{ formula.nombrePaciente }}</span>
+                  <span class="rel-sub" *ngIf="formula.dniPaciente">(DNI: {{ formula.dniPaciente }})</span>
+                </div>
+                <div class="rel-row" *ngIf="formula.nombreMedico">
+                  <svg lucideStethoscope class="rel-icon"></svg>
+                  <span class="rel-doctor">Dr(a). {{ formula.nombreMedico }}</span>
+                </div>
+              </div>
+              <ng-template #noConsulta>
+                <span class="no-relation-text">No vinculada</span>
+              </ng-template>
+            </td>
+
+            <!-- Estado -->
+            <td>
+              <span
+                class="status-badge"
+                [class.status-activo]="formula.estado === 'ACTIVO' || formula.estado === 'DISPONIBLE'"
+                [class.status-preparacion]="formula.estado === 'EN_PREPARACION'"
+                [class.status-dispensada]="formula.estado === 'DISPENSADA'"
+                [class.status-inactivo]="formula.estado === 'INACTIVO' || formula.estado === 'ANULADA'"
+              >
+                {{ formula.estado }}
+              </span>
+            </td>
+
+            <!-- Acciones -->
+            <td class="col-actions">
+              <div class="action-buttons">
+                <!-- Ver Detalle -->
+                <button
+                  type="button"
+                  class="action-btn action-view"
+                  (click)="abrirModalDetalle(formula)"
+                  title="Ver detalle de la fórmula"
+                  aria-label="Ver detalle"
+                >
+                  <svg lucideEye class="action-icon"></svg>
+                </button>
+
+                <!-- Editar -->
+                <button
+                  *ngIf="canManage()"
+                  type="button"
+                  class="action-btn action-edit"
+                  (click)="abrirModalEditar(formula)"
+                  title="Editar fórmula magistral"
+                  aria-label="Editar"
+                >
+                  <svg lucidePencil class="action-icon"></svg>
+                </button>
+
+                <!-- Cambiar Estado / Desactivar -->
+                <button
+                  *ngIf="canManage() && formula.estado === 'ACTIVO'"
+                  type="button"
+                  class="action-btn action-ban"
+                  (click)="abrirModalEstado(formula, 'INACTIVO')"
+                  title="Desactivar fórmula"
+                  aria-label="Desactivar"
+                >
+                  <svg lucideBan class="action-icon"></svg>
+                </button>
+                <button
+                  *ngIf="canManage() && formula.estado === 'INACTIVO'"
+                  type="button"
+                  class="action-btn action-activate"
+                  (click)="abrirModalEstado(formula, 'ACTIVO')"
+                  title="Reactivar fórmula"
+                  aria-label="Reactivar"
+                >
+                  <svg lucideCheckCircle class="action-icon"></svg>
+                </button>
+
+                <!-- Eliminar / Anular Fórmula (DELETE HTTP) -->
+                <button
+                  *ngIf="canManage()"
+                  type="button"
+                  class="action-btn action-delete"
+                  (click)="abrirModalEliminar(formula)"
+                  title="Eliminar fórmula magistral"
+                  aria-label="Eliminar"
+                >
+                  <svg lucideTrash2 class="action-icon text-danger"></svg>
+                </button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pie de tabla con conteo -->
+    <div class="table-footer" *ngIf="!loading && formulas.length > 0">
+      <span>Mostrando {{ formulas.length }} fórmula(s) magistral(es)</span>
+    </div>
+  </section>
+
+  <!-- ========================================== -->
+  <!-- MODAL: REGISTRAR FÓRMULA MAGISTRAL         -->
+  <!-- ========================================== -->
+  <div *ngIf="showCreateModal" class="modal-backdrop" (click)="cerrarModalCrear()">
+    <div class="modal-dialog modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <!-- Encabezado Modal -->
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble">
+              <svg lucidePlus class="modal-header-icon"></svg>
+            </div>
+            <div>
+              <h2 class="modal-title">Registrar nueva fórmula magistral</h2>
+              <p class="modal-subtitle">Ingrese los datos clínicos y farmacológicos prescritos.</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalCrear()" aria-label="Cerrar modal">&times;</button>
+        </div>
+
+        <!-- Formulario Reactivo -->
+        <form [formGroup]="createForm" (ngSubmit)="guardarCrear()" class="modal-form">
+          <div class="modal-body">
+            <!-- 1. Consulta Médica Asociada -->
+            <div class="form-section">
+              <h3 class="section-title">
+                <svg lucideStethoscope class="section-icon"></svg>
+                <span>Vinculación con Consulta Médica</span>
+              </h3>
+              <div class="form-group">
+                <label for="create-consulta" class="form-label">
+                  Consulta médica del paciente:
+                </label>
+                <select
+                  id="create-consulta"
+                  formControlName="idConsulta"
+                  class="form-control"
+                >
+                  <option [ngValue]="null">-- Sin consulta médica vinculada directa --</option>
+                  <option *ngFor="let c of consultasDisponibles" [value]="c.idConsulta">
+                    Consulta #{{ c.idConsulta }} - {{ c.fechaConsulta | date:'dd/MM/yyyy HH:mm' }} |
+                    Paciente: {{ c.nombrePaciente }} (DNI: {{ c.dniPaciente }}) |
+                    Médico: {{ c.nombreMedico }}
+                  </option>
+                </select>
+                <span class="field-hint">
+                  Al asociar la consulta médica, el paciente y el médico tratante se vincularán de manera coherente en el backend.
+                </span>
+              </div>
+
+              <!-- Vista previa de la consulta seleccionada -->
+              <div
+                *ngIf="obtenerConsultaSeleccionada(createForm.get('idConsulta')?.value) as consultaSel"
+                class="consultation-preview-card"
+              >
+                <div class="preview-header">
+                  <strong>Detalles derivados de la consulta médica seleccionada:</strong>
+                </div>
+                <div class="preview-grid">
+                  <div>
+                    <span class="preview-lbl">Paciente:</span>
+                    <span class="preview-val">{{ consultaSel.nombrePaciente }} (DNI: {{ consultaSel.dniPaciente }})</span>
+                  </div>
+                  <div>
+                    <span class="preview-lbl">Médico responsable:</span>
+                    <span class="preview-val">{{ consultaSel.nombreMedico }} ({{ consultaSel.especialidadMedico }})</span>
+                  </div>
+                  <div class="preview-col-span" *ngIf="consultaSel.diagnostico">
+                    <span class="preview-lbl">Diagnóstico:</span>
+                    <span class="preview-val">{{ consultaSel.diagnostico }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Información General de la Fórmula -->
+            <div class="form-section">
+              <h3 class="section-title">
+                <svg lucideFlaskConical class="section-icon"></svg>
+                <span>Identificación y Uso de la Fórmula</span>
+              </h3>
+
+              <div class="form-row">
+                <!-- Nombre -->
+                <div class="form-group flex-2">
+                  <label for="create-nombre" class="form-label required">Nombre de la fórmula:</label>
+                  <input
+                    type="text"
+                    id="create-nombre"
+                    formControlName="nombre"
+                    class="form-control"
+                    placeholder="Ej. Crema Tópica Hidratante con Urea al 10%"
+                    [class.is-invalid]="createForm.get('nombre')?.invalid && createForm.get('nombre')?.touched"
+                  />
+                  <div *ngIf="createForm.get('nombre')?.invalid && createForm.get('nombre')?.touched" class="invalid-feedback">
+                    <span *ngIf="createForm.get('nombre')?.errors?.['required']">El nombre de la fórmula es obligatorio.</span>
+                    <span *ngIf="createForm.get('nombre')?.errors?.['minlength']">Debe tener al menos 2 caracteres.</span>
+                    <span *ngIf="createForm.get('nombre')?.errors?.['maxlength']">No puede exceder los 150 caracteres.</span>
+                  </div>
+                </div>
+
+                <!-- Estado inicial -->
+                <div class="form-group flex-1">
+                  <label for="create-estado" class="form-label required">Estado:</label>
+                  <select id="create-estado" formControlName="estado" class="form-control">
+                    <option *ngFor="let est of estadosFormula" [value]="est">{{ est }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Descripción -->
+              <div class="form-group">
+                <label for="create-descripcion" class="form-label">
+                  Descripción o indicaciones terapéuticas:
+                </label>
+                <textarea
+                  id="create-descripcion"
+                  formControlName="descripcion"
+                  rows="2"
+                  class="form-control"
+                  placeholder="Instrucciones de conservación, aplicación y recomendaciones médicas..."
+                  [class.is-invalid]="createForm.get('descripcion')?.invalid && createForm.get('descripcion')?.touched"
+                ></textarea>
+                <div *ngIf="createForm.get('descripcion')?.invalid && createForm.get('descripcion')?.touched" class="invalid-feedback">
+                  <span *ngIf="createForm.get('descripcion')?.errors?.['maxlength']">La descripción no puede superar los 255 caracteres.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Composición y Componentes Estructurados -->
+            <div class="form-section">
+              <div class="section-header-row">
+                <h3 class="section-title">
+                  <svg lucidePill class="section-icon"></svg>
+                  <span>Componentes e Ingredientes Estructurados</span>
+                </h3>
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm"
+                  (click)="agregarIngrediente(false)"
+                >
+                  <svg lucidePlus class="btn-icon-sm"></svg>
+                  <span>Agregar componente</span>
+                </button>
+              </div>
+
+              <!-- Lista dinámica de componentes -->
+              <div formArrayName="ingredientes" class="ingredients-list">
+                <div
+                  *ngFor="let ing of createIngredientes.controls; let i = index"
+                  [formGroupName]="i"
+                  class="ingredient-row"
+                >
+                  <div class="ing-field ing-name">
+                    <label class="mini-label">Componente / Principio Activo</label>
+                    <input
+                      type="text"
+                      formControlName="nombre"
+                      class="form-control form-control-sm"
+                      placeholder="Ej. Urea pura, Ácido retinoico"
+                      (input)="sincronizarComposicionDesdeIngredientes(false)"
+                    />
+                  </div>
+
+                  <div class="ing-field ing-qty">
+                    <label class="mini-label">Cantidad</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      formControlName="cantidad"
+                      class="form-control form-control-sm"
+                      placeholder="10.0"
+                      (input)="sincronizarComposicionDesdeIngredientes(false)"
+                    />
+                  </div>
+
+                  <div class="ing-field ing-unit">
+                    <label class="mini-label">Unidad</label>
+                    <select
+                      formControlName="unidad"
+                      class="form-control form-control-sm"
+                      (change)="sincronizarComposicionDesdeIngredientes(false)"
+                    >
+                      <option *ngFor="let u of unidadesMedida" [value]="u">{{ u }}</option>
+                    </select>
+                  </div>
+
+                  <div class="ing-actions">
+                    <button
+                      type="button"
+                      class="btn-icon-danger"
+                      (click)="removerIngrediente(i, false)"
+                      title="Eliminar este componente"
+                    >
+                      <svg lucideTrash2 class="action-icon-sm"></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Campo Composición Consolidada -->
+              <div class="form-group mt-3">
+                <label for="create-composicion" class="form-label required">
+                  Composición consolidada de la fórmula:
+                </label>
+                <input
+                  type="text"
+                  id="create-composicion"
+                  formControlName="composicion"
+                  class="form-control"
+                  placeholder="Ej. Urea 10 g, Vitamina E 2 g, Crema base c.s.p 100 g"
+                  [class.is-invalid]="createForm.get('composicion')?.invalid && createForm.get('composicion')?.touched"
+                />
+                <div class="field-footer-info">
+                  <span class="field-hint">
+                    Puede redactar directamente la composición o autogenerarla agregando componentes arriba.
+                  </span>
+                  <span class="char-count">
+                    {{ (createForm.get('composicion')?.value || '').length }} / 255 car.
+                  </span>
+                </div>
+                <div *ngIf="createForm.get('composicion')?.invalid && createForm.get('composicion')?.touched" class="invalid-feedback">
+                  <span *ngIf="createForm.get('composicion')?.errors?.['required']">La composición o ingredientes son obligatorios.</span>
+                  <span *ngIf="createForm.get('composicion')?.errors?.['maxlength']">No puede superar los 255 caracteres.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Dosificación Total y Fechas de Vigencia -->
+            <div class="form-section">
+              <h3 class="section-title">
+                <svg lucideCalendar class="section-icon"></svg>
+                <span>Dosificación y Fechas de Vigencia</span>
+              </h3>
+
+              <div class="form-row">
+                <!-- Cantidad Total -->
+                <div class="form-group flex-1">
+                  <label for="create-cantidad" class="form-label required">Cantidad total de la preparación:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1.00"
+                    id="create-cantidad"
+                    formControlName="cantidad"
+                    class="form-control"
+                    [class.is-invalid]="createForm.get('cantidad')?.invalid && createForm.get('cantidad')?.touched"
+                  />
+                  <div *ngIf="createForm.get('cantidad')?.invalid && createForm.get('cantidad')?.touched" class="invalid-feedback">
+                    <span *ngIf="createForm.get('cantidad')?.errors?.['required']">La cantidad es obligatoria.</span>
+                    <span *ngIf="createForm.get('cantidad')?.errors?.['min']">La cantidad debe ser igual o mayor a 1.00.</span>
+                  </div>
+                </div>
+
+                <!-- Unidad de Medida -->
+                <div class="form-group flex-1">
+                  <label for="create-unidad" class="form-label required">Unidad de medida:</label>
+                  <select id="create-unidad" formControlName="unidad" class="form-control">
+                    <option *ngFor="let u of unidadesMedida" [value]="u">{{ u }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <!-- Fecha Preparación -->
+                <div class="form-group flex-1">
+                  <label for="create-prep" class="form-label required">Fecha de preparación / prescripción:</label>
+                  <input
+                    type="date"
+                    id="create-prep"
+                    formControlName="fechaPreparacion"
+                    class="form-control"
+                    [class.is-invalid]="createForm.get('fechaPreparacion')?.invalid && createForm.get('fechaPreparacion')?.touched"
+                  />
+                  <div *ngIf="createForm.get('fechaPreparacion')?.invalid && createForm.get('fechaPreparacion')?.touched" class="invalid-feedback">
+                    <span *ngIf="createForm.get('fechaPreparacion')?.errors?.['required']">La fecha de preparación es obligatoria.</span>
+                  </div>
+                </div>
+
+                <!-- Fecha Vencimiento -->
+                <div class="form-group flex-1">
+                  <label for="create-venc" class="form-label required">Fecha de vencimiento:</label>
+                  <input
+                    type="date"
+                    id="create-venc"
+                    formControlName="fechaVencimiento"
+                    class="form-control"
+                    [class.is-invalid]="createForm.get('fechaVencimiento')?.invalid && createForm.get('fechaVencimiento')?.touched"
+                  />
+                  <div *ngIf="createForm.get('fechaVencimiento')?.invalid && createForm.get('fechaVencimiento')?.touched" class="invalid-feedback">
+                    <span *ngIf="createForm.get('fechaVencimiento')?.errors?.['required']">La fecha de vencimiento es obligatoria.</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Error de rango de fechas -->
+              <div *ngIf="createForm.errors?.['fechaVencimientoInvalida']" class="alert alert-danger py-2 mt-2">
+                <span>La fecha de vencimiento debe ser posterior o igual a la fecha de preparación.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pie del modal -->
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-outline"
+              (click)="cerrarModalCrear()"
+              [disabled]="submitting"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="createForm.invalid || submitting"
+              id="btn-guardar-formula"
+            >
+              <svg *ngIf="submitting" lucideLoaderCircle class="spinner-icon-sm"></svg>
+              <span>{{ submitting ? 'Guardando fórmula...' : 'Guardar fórmula magistral' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: EDITAR FÓRMULA MAGISTRAL            -->
+  <!-- ========================================== -->
+  <div *ngIf="showEditModal" class="modal-backdrop" (click)="cerrarModalEditar()">
+    <div class="modal-dialog modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <!-- Encabezado Modal -->
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble edit-bubble">
+              <svg lucidePencil class="modal-header-icon"></svg>
+            </div>
+            <div>
+              <h2 class="modal-title">Editar fórmula magistral #{{ selectedFormula?.id }}</h2>
+              <p class="modal-subtitle">Modifique los datos clínicos y cantidades de la fórmula.</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalEditar()" aria-label="Cerrar modal">&times;</button>
+        </div>
+
+        <!-- Formulario Reactivo Edición -->
+        <form [formGroup]="editForm" (ngSubmit)="guardarEditar()" class="modal-form">
+          <div class="modal-body">
+            <!-- 1. Consulta Médica Asociada -->
+            <div class="form-section">
+              <h3 class="section-title">
+                <svg lucideStethoscope class="section-icon"></svg>
+                <span>Consulta Médica Asociada</span>
+              </h3>
+              <div class="form-group">
+                <label for="edit-consulta" class="form-label">
+                  Consulta médica del paciente:
+                </label>
+                <select
+                  id="edit-consulta"
+                  formControlName="idConsulta"
+                  class="form-control"
+                >
+                  <option [ngValue]="null">-- Sin consulta médica vinculada directa --</option>
+                  <option *ngFor="let c of consultasDisponibles" [value]="c.idConsulta">
+                    Consulta #{{ c.idConsulta }} - {{ c.fechaConsulta | date:'dd/MM/yyyy HH:mm' }} |
+                    Paciente: {{ c.nombrePaciente }} (DNI: {{ c.dniPaciente }}) |
+                    Médico: {{ c.nombreMedico }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- Vista previa si existe consulta seleccionada -->
+              <div
+                *ngIf="obtenerConsultaSeleccionada(editForm.get('idConsulta')?.value) as consultaSel"
+                class="consultation-preview-card"
+              >
+                <div class="preview-header">
+                  <strong>Detalles de la atención médica vinculada:</strong>
+                </div>
+                <div class="preview-grid">
+                  <div>
+                    <span class="preview-lbl">Paciente:</span>
+                    <span class="preview-val">{{ consultaSel.nombrePaciente }} (DNI: {{ consultaSel.dniPaciente }})</span>
+                  </div>
+                  <div>
+                    <span class="preview-lbl">Médico tratante:</span>
+                    <span class="preview-val">{{ consultaSel.nombreMedico }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Información General -->
+            <div class="form-section">
+              <h3 class="section-title">
+                <svg lucideFlaskConical class="section-icon"></svg>
+                <span>Datos de la Fórmula</span>
+              </h3>
+
+              <div class="form-row">
+                <div class="form-group flex-2">
+                  <label for="edit-nombre" class="form-label required">Nombre de la fórmula:</label>
+                  <input
+                    type="text"
+                    id="edit-nombre"
+                    formControlName="nombre"
+                    class="form-control"
+                    [class.is-invalid]="editForm.get('nombre')?.invalid && editForm.get('nombre')?.touched"
+                  />
+                  <div *ngIf="editForm.get('nombre')?.invalid && editForm.get('nombre')?.touched" class="invalid-feedback">
+                    <span *ngIf="editForm.get('nombre')?.errors?.['required']">El nombre es obligatorio.</span>
+                  </div>
+                </div>
+
+                <div class="form-group flex-1">
+                  <label for="edit-estado" class="form-label required">Estado:</label>
+                  <select id="edit-estado" formControlName="estado" class="form-control">
+                    <option *ngFor="let est of estadosFormula" [value]="est">{{ est }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="edit-descripcion" class="form-label">Descripción o indicaciones:</label>
+                <textarea
+                  id="edit-descripcion"
+                  formControlName="descripcion"
+                  rows="2"
+                  class="form-control"
+                ></textarea>
+              </div>
+            </div>
+
+            <!-- 3. Composición -->
+            <div class="form-section">
+              <div class="section-header-row">
+                <h3 class="section-title">
+                  <svg lucidePill class="section-icon"></svg>
+                  <span>Composición y Componentes</span>
+                </h3>
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm"
+                  (click)="agregarIngrediente(true)"
+                >
+                  <svg lucidePlus class="btn-icon-sm"></svg>
+                  <span>Agregar componente</span>
+                </button>
+              </div>
+
+              <div formArrayName="ingredientes" class="ingredients-list">
+                <div
+                  *ngFor="let ing of editIngredientes.controls; let i = index"
+                  [formGroupName]="i"
+                  class="ingredient-row"
+                >
+                  <div class="ing-field ing-name">
+                    <label class="mini-label">Componente</label>
+                    <input
+                      type="text"
+                      formControlName="nombre"
+                      class="form-control form-control-sm"
+                      (input)="sincronizarComposicionDesdeIngredientes(true)"
+                    />
+                  </div>
+                  <div class="ing-field ing-qty">
+                    <label class="mini-label">Cantidad</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      formControlName="cantidad"
+                      class="form-control form-control-sm"
+                      (input)="sincronizarComposicionDesdeIngredientes(true)"
+                    />
+                  </div>
+                  <div class="ing-field ing-unit">
+                    <label class="mini-label">Unidad</label>
+                    <select
+                      formControlName="unidad"
+                      class="form-control form-control-sm"
+                      (change)="sincronizarComposicionDesdeIngredientes(true)"
+                    >
+                      <option *ngFor="let u of unidadesMedida" [value]="u">{{ u }}</option>
+                    </select>
+                  </div>
+                  <div class="ing-actions">
+                    <button
+                      type="button"
+                      class="btn-icon-danger"
+                      (click)="removerIngrediente(i, true)"
+                      title="Eliminar este componente"
+                    >
+                      <svg lucideTrash2 class="action-icon-sm"></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group mt-3">
+                <label for="edit-composicion" class="form-label required">Composición consolidada:</label>
+                <input
+                  type="text"
+                  id="edit-composicion"
+                  formControlName="composicion"
+                  class="form-control"
+                  [class.is-invalid]="editForm.get('composicion')?.invalid && editForm.get('composicion')?.touched"
+                />
+                <div class="field-footer-info">
+                  <span class="char-count">
+                    {{ (editForm.get('composicion')?.value || '').length }} / 255 car.
+                  </span>
+                </div>
+                <div *ngIf="editForm.get('composicion')?.invalid && editForm.get('composicion')?.touched" class="invalid-feedback">
+                  <span *ngIf="editForm.get('composicion')?.errors?.['required']">La composición es obligatoria.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. Cantidad y Fechas -->
+            <div class="form-section">
+              <h3 class="section-title">
+                <svg lucideCalendar class="section-icon"></svg>
+                <span>Cantidad Total y Vigencia</span>
+              </h3>
+
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="edit-cantidad" class="form-label required">Cantidad total:</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1.00"
+                    id="edit-cantidad"
+                    formControlName="cantidad"
+                    class="form-control"
+                    [class.is-invalid]="editForm.get('cantidad')?.invalid && editForm.get('cantidad')?.touched"
+                  />
+                  <div *ngIf="editForm.get('cantidad')?.invalid && editForm.get('cantidad')?.touched" class="invalid-feedback">
+                    <span *ngIf="editForm.get('cantidad')?.errors?.['min']">La cantidad debe ser mayor o igual a 1.00.</span>
+                  </div>
+                </div>
+
+                <div class="form-group flex-1">
+                  <label for="edit-unidad" class="form-label required">Unidad:</label>
+                  <select id="edit-unidad" formControlName="unidad" class="form-control">
+                    <option *ngFor="let u of unidadesMedida" [value]="u">{{ u }}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="edit-prep" class="form-label required">Fecha de preparación:</label>
+                  <input
+                    type="date"
+                    id="edit-prep"
+                    formControlName="fechaPreparacion"
+                    class="form-control"
+                  />
+                </div>
+
+                <div class="form-group flex-1">
+                  <label for="edit-venc" class="form-label required">Fecha de vencimiento:</label>
+                  <input
+                    type="date"
+                    id="edit-venc"
+                    formControlName="fechaVencimiento"
+                    class="form-control"
+                  />
+                </div>
+              </div>
+
+              <div *ngIf="editForm.errors?.['fechaVencimientoInvalida']" class="alert alert-danger py-2 mt-2">
+                <span>La fecha de vencimiento debe ser posterior o igual a la de preparación.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-outline"
+              (click)="cerrarModalEditar()"
+              [disabled]="submitting"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="btn btn-primary"
+              [disabled]="editForm.invalid || submitting"
+            >
+              <svg *ngIf="submitting" lucideLoaderCircle class="spinner-icon-sm"></svg>
+              <span>{{ submitting ? 'Guardando cambios...' : 'Actualizar fórmula magistral' }}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: VER DETALLE DE FÓRMULA MAGISTRAL    -->
+  <!-- ========================================== -->
+  <div *ngIf="showDetailModal && selectedFormula" class="modal-backdrop" (click)="cerrarModalDetalle()">
+    <div class="modal-dialog modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <!-- Encabezado Detalle -->
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble detail-bubble">
+              <svg lucideEye class="modal-header-icon"></svg>
+            </div>
+            <div>
+              <div class="d-flex align-items-center gap-2">
+                <h2 class="modal-title">{{ selectedFormula.nombre }}</h2>
+                <span
+                  class="status-badge"
+                  [class.status-activo]="selectedFormula.estado === 'ACTIVO' || selectedFormula.estado === 'DISPONIBLE'"
+                  [class.status-preparacion]="selectedFormula.estado === 'EN_PREPARACION'"
+                  [class.status-dispensada]="selectedFormula.estado === 'DISPENSADA'"
+                  [class.status-inactivo]="selectedFormula.estado === 'INACTIVO' || selectedFormula.estado === 'ANULADA'"
+                >
+                  {{ selectedFormula.estado }}
+                </span>
+              </div>
+              <p class="modal-subtitle">Fórmula Magistral Identificador #{{ selectedFormula.id }}</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalDetalle()" aria-label="Cerrar modal">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- Tarjeta de Paciente y Médico -->
+          <div class="detail-card mb-3" *ngIf="selectedFormula.nombrePaciente || selectedFormula.nombreMedico">
+            <div class="detail-card-header">
+              <svg lucideClipboardList class="section-icon"></svg>
+              <h4>Contexto Clínico y Relación Asistencial</h4>
+            </div>
+            <div class="detail-card-body detail-grid-2">
+              <div *ngIf="selectedFormula.nombrePaciente">
+                <span class="detail-key">Paciente Prescrito:</span>
+                <span class="detail-value fw-bold">{{ selectedFormula.nombrePaciente }}</span>
+                <span class="detail-sub" *ngIf="selectedFormula.dniPaciente">DNI: {{ selectedFormula.dniPaciente }}</span>
+              </div>
+
+              <div *ngIf="selectedFormula.nombreMedico">
+                <span class="detail-key">Médico Responsable:</span>
+                <span class="detail-value fw-bold">Dr(a). {{ selectedFormula.nombreMedico }}</span>
+                <span class="detail-sub" *ngIf="selectedFormula.especialidadMedico">{{ selectedFormula.especialidadMedico }} (CMP: {{ selectedFormula.colegiaturaMedico || 'Registrada' }})</span>
+              </div>
+
+              <div *ngIf="selectedFormula.idConsulta" class="grid-col-full">
+                <span class="detail-key">Consulta Médica Asociada:</span>
+                <span class="detail-value">
+                  Consulta #{{ selectedFormula.idConsulta }} - Fecha: {{ selectedFormula.fechaConsulta | date:'dd/MM/yyyy HH:mm' }}
+                </span>
+                <p class="detail-sub mt-1" *ngIf="selectedFormula.motivoConsulta">
+                  <strong>Motivo:</strong> {{ selectedFormula.motivoConsulta }}
+                </p>
+                <p class="detail-sub" *ngIf="selectedFormula.diagnosticoConsulta">
+                  <strong>Diagnóstico:</strong> {{ selectedFormula.diagnosticoConsulta }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Composición Farmacéutica -->
+          <div class="detail-card mb-3">
+            <div class="detail-card-header">
+              <svg lucidePill class="section-icon"></svg>
+              <h4>Composición y Principios Activos</h4>
+            </div>
+            <div class="detail-card-body">
+              <div class="composition-highlight-box">
+                {{ selectedFormula.composicion }}
+              </div>
+              <div *ngIf="selectedFormula.descripcion" class="mt-2">
+                <span class="detail-key">Indicaciones terapéuticas y modo de uso:</span>
+                <p class="detail-description-text">{{ selectedFormula.descripcion }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dosificación y Vigencia -->
+          <div class="detail-card">
+            <div class="detail-card-header">
+              <svg lucideCalendar class="section-icon"></svg>
+              <h4>Dosificación Total y Tiempos de Conservación</h4>
+            </div>
+            <div class="detail-card-body detail-grid-3">
+              <div>
+                <span class="detail-key">Cantidad Total:</span>
+                <span class="detail-value fs-5 fw-bold text-primary">
+                  {{ selectedFormula.cantidad }} {{ selectedFormula.unidad }}
+                </span>
+              </div>
+
+              <div>
+                <span class="detail-key">Fecha de Preparación:</span>
+                <span class="detail-value">{{ selectedFormula.fechaPreparacion | date:'dd/MM/yyyy' }}</span>
+              </div>
+
+              <div>
+                <span class="detail-key">Fecha de Vencimiento:</span>
+                <span
+                  class="detail-value fw-bold"
+                  [class.text-danger]="estaVencida(selectedFormula.fechaVencimiento)"
+                  [class.text-warning]="proximaAVencer(selectedFormula.fechaVencimiento)"
+                >
+                  {{ selectedFormula.fechaVencimiento | date:'dd/MM/yyyy' }}
+                </span>
+                <div *ngIf="estaVencida(selectedFormula.fechaVencimiento)" class="badge-mini badge-danger mt-1">
+                  ¡Fórmula expirada! No suministrar
+                </div>
+                <div *ngIf="proximaAVencer(selectedFormula.fechaVencimiento)" class="badge-mini badge-warning mt-1">
+                  Próxima a vencer (&le; 7 días)
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-outline"
+            (click)="cerrarModalDetalle()"
+          >
+            Cerrar detalle
+          </button>
+          <button
+            *ngIf="canManage()"
+            type="button"
+            class="btn btn-primary"
+            (click)="cerrarModalDetalle(); abrirModalEditar(selectedFormula)"
+          >
+            <svg lucidePencil class="btn-icon"></svg>
+            <span>Editar fórmula</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: CONFIRMAR CAMBIO DE ESTADO          -->
+  <!-- ========================================== -->
+  <div *ngIf="showStatusModal && statusTargetFormula" class="modal-backdrop" (click)="cerrarModalEstado()">
+    <div class="modal-dialog modal-sm" (click)="$event.stopPropagation()">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div class="modal-title-wrapper">
+            <div class="modal-icon-bubble status-bubble">
+              <svg lucideAlertTriangle class="modal-header-icon text-warning"></svg>
+            </div>
+            <div>
+              <h2 class="modal-title">Confirmar cambio de estado</h2>
+              <p class="modal-subtitle">Fórmula #{{ statusTargetFormula.id }} - {{ statusTargetFormula.nombre }}</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalEstado()">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <p>
+            ¿Está seguro de cambiar el estado de la fórmula de
+            <strong>{{ statusTargetFormula.estado }}</strong> a
+            <strong>{{ statusTargetNuevoEstado }}</strong>?
+          </p>
+          <p class="field-hint" *ngIf="statusTargetNuevoEstado === 'INACTIVO' || statusTargetNuevoEstado === 'ANULADA'">
+            Esta acción preservará el registro en el historial médico clínico y farmacéutico para auditoría y trazabilidad.
+          </p>
+        </div>
+
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-outline"
+            (click)="cerrarModalEstado()"
+            [disabled]="submitting"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn"
+            [class.btn-danger]="statusTargetNuevoEstado === 'INACTIVO' || statusTargetNuevoEstado === 'ANULADA'"
+            [class.btn-primary]="statusTargetNuevoEstado !== 'INACTIVO' && statusTargetNuevoEstado !== 'ANULADA'"
+            (click)="confirmarCambioEstado()"
+            [disabled]="submitting"
+          >
+            <svg *ngIf="submitting" lucideLoaderCircle class="spinner-icon-sm"></svg>
+            <span>{{ submitting ? 'Procesando...' : 'Confirmar cambio' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIRMACIÓN DE ELIMINACIÓN / ANULACIÓN (DELETE HTTP) -->
+  <div *ngIf="showDeleteModal && formulaAEliminar" class="modal-overlay">
+    <div class="modal-dialog modal-dialog-sm" role="dialog" aria-modal="true" aria-labelledby="delete-formula-title">
+      <div class="modal-content">
+        <div class="modal-header modal-header-danger">
+          <div class="modal-title-wrap">
+            <svg lucideAlertTriangle class="modal-title-icon text-danger"></svg>
+            <div>
+              <h3 id="delete-formula-title" class="modal-title text-danger">Eliminar Fórmula Magistral</h3>
+              <p class="modal-subtitle">Operación DELETE en la API REST</p>
+            </div>
+          </div>
+          <button type="button" class="close-btn" (click)="cerrarModalEliminar()">&times;</button>
+        </div>
+
+        <div class="modal-body">
+          <p>
+            ¿Está seguro de que desea eliminar permanentemente o anular la fórmula magistral
+            <strong>"{{ formulaAEliminar.nombre }}"</strong>?
+          </p>
+          <div class="alert-box alert-warning mt-2">
+            <svg lucideAlertTriangle class="alert-icon"></svg>
+            <div class="alert-content">
+              <p class="alert-desc">
+                Esta acción ejecutará una solicitud <strong>DELETE /api/formulas-magistrales/{{ formulaAEliminar.id }}</strong>
+                y registrará el estado anulado en la base de datos PostgreSQL.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-outline"
+            (click)="cerrarModalEliminar()"
+            [disabled]="submitting"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger"
+            (click)="confirmarEliminarFormula()"
+            [disabled]="submitting"
+          >
+            <svg *ngIf="submitting" lucideLoaderCircle class="spinner-icon-sm"></svg>
+            <span>{{ submitting ? 'Eliminando...' : 'Sí, Eliminar' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
