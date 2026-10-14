@@ -1,0 +1,432 @@
+<div class="dashboard-page">
+  <!-- ENCABEZADO PRINCIPAL -->
+  <header class="dashboard-header">
+    <div class="header-titles">
+      <div class="header-badge-role" [ngClass]="{'badge-admin': esAdmin, 'badge-medico': !esAdmin}">
+        <svg *ngIf="esAdmin" lucideShield class="icon-badge"></svg>
+        <svg *ngIf="!esAdmin" lucideStethoscope class="icon-badge"></svg>
+        <span>{{ esAdmin ? 'Administración Central' : 'Módulo Médico Profesional' }}</span>
+      </div>
+      <h1 class="header-main-title">
+        {{ saludoHora }}, <span class="highlight-user">{{ nombreUsuarioMostrado }}</span>
+      </h1>
+      <p class="header-subtitle">
+        {{ fechaHoyFormateada }}
+        <span *ngIf="resumen?.medicoInfo as med"> &bull; {{ med.especialidad }} (Col. {{ med.colegiatura }})</span>
+      </p>
+    </div>
+
+    <div class="header-actions">
+      <button
+        type="button"
+        class="btn-refresh"
+        (click)="cargarDashboard()"
+        [disabled]="cargando"
+        title="Actualizar estadísticas del dashboard"
+      >
+        <svg lucideRefreshCw class="btn-refresh-icon" [ngClass]="{'spin-animation': cargando}"></svg>
+        <span>{{ cargando ? 'Actualizando...' : 'Actualizar' }}</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ALERTA: MÉDICO SIN FICHA VINCULADA -->
+  <div *ngIf="resumen && !resumen.tienePerfilMedico && !esAdmin" class="alert-box alert-warning">
+    <svg lucideAlertTriangle class="alert-icon"></svg>
+    <div class="alert-content">
+      <h3 class="alert-title">Perfil Médico Pendiente de Asociación</h3>
+      <p class="alert-desc">
+        Tu usuario está registrado con rol <strong>MÉDICO</strong> pero aún no tiene una ficha médica clínica vinculada en la base de datos.
+        Por favor solicita al Administrador que asocie tu cuenta de usuario a tu registro de médico en el módulo de Médicos.
+      </p>
+    </div>
+  </div>
+
+  <!-- ALERTA DE ERROR DE CARGA -->
+  <div *ngIf="errorMensaje" class="alert-box alert-danger">
+    <svg lucideAlertTriangle class="alert-icon"></svg>
+    <div class="alert-content">
+      <h3 class="alert-title">No se pudieron cargar las estadísticas</h3>
+      <p class="alert-desc">{{ errorMensaje }}</p>
+    </div>
+    <button type="button" class="btn-retry" (click)="cargarDashboard()">Reintentar</button>
+  </div>
+
+  <!-- BARRA DE FILTROS POR PERIODO -->
+  <section class="period-filter-section" aria-label="Filtro de periodo de estadísticas">
+    <div class="filter-controls">
+      <div class="filter-pills" role="radiogroup" aria-label="Seleccionar periodo">
+        <button
+          type="button"
+          class="pill-btn"
+          [class.active]="periodoSeleccionado === 'HOY'"
+          (click)="cambiarPeriodo('HOY')"
+        >
+          Hoy
+        </button>
+        <button
+          type="button"
+          class="pill-btn"
+          [class.active]="periodoSeleccionado === '7_DIAS'"
+          (click)="cambiarPeriodo('7_DIAS')"
+        >
+          Últimos 7 días
+        </button>
+        <button
+          type="button"
+          class="pill-btn"
+          [class.active]="periodoSeleccionado === '30_DIAS'"
+          (click)="cambiarPeriodo('30_DIAS')"
+        >
+          Últimos 30 días
+        </button>
+        <button
+          type="button"
+          class="pill-btn"
+          [class.active]="periodoSeleccionado === 'MES_ACTUAL'"
+          (click)="cambiarPeriodo('MES_ACTUAL')"
+        >
+          Mes actual
+        </button>
+        <button
+          type="button"
+          class="pill-btn"
+          [class.active]="periodoSeleccionado === 'PERSONALIZADO'"
+          (click)="cambiarPeriodo('PERSONALIZADO')"
+        >
+          Personalizado
+        </button>
+      </div>
+
+      <!-- FORMULARIO DE RANGO PERSONALIZADO -->
+      <div *ngIf="periodoSeleccionado === 'PERSONALIZADO'" class="custom-range-form">
+        <div class="input-date-group">
+          <label for="fechaDesde">Desde:</label>
+          <input
+            id="fechaDesde"
+            type="date"
+            class="date-input"
+            [(ngModel)]="fechaDesdePersonalizada"
+            [max]="fechaHastaPersonalizada || fechaHoyStr"
+          />
+        </div>
+        <div class="input-date-group">
+          <label for="fechaHasta">Hasta:</label>
+          <input
+            id="fechaHasta"
+            type="date"
+            class="date-input"
+            [(ngModel)]="fechaHastaPersonalizada"
+            [min]="fechaDesdePersonalizada"
+            [max]="fechaHoyStr"
+          />
+        </div>
+        <button
+          type="button"
+          class="btn-apply-filter"
+          (click)="aplicarFiltroPersonalizado()"
+          [disabled]="cargando || !fechaDesdePersonalizada || !fechaHastaPersonalizada"
+        >
+          Aplicar
+        </button>
+      </div>
+    </div>
+
+    <div class="period-status-badge" *ngIf="resumen">
+      <svg lucideCalendar class="badge-calendar-icon"></svg>
+      <span>Periodo activo: <strong>{{ formatearFechaCorta(resumen.fechaDesde) }}</strong> al <strong>{{ formatearFechaCorta(resumen.fechaHasta) }}</strong></span>
+    </div>
+  </section>
+
+  <!-- SKELETON / LOADING STATE -->
+  <div *ngIf="cargando && !resumen" class="skeleton-grid">
+    <div class="skeleton-card" *ngFor="let item of [1,2,3,4,5,6]"></div>
+  </div>
+
+  <!-- TARJETAS DE INDICADORES PRINCIPALES (KPIS) -->
+  <section *ngIf="resumen && resumen.kpis && resumen.kpis.length > 0" class="kpis-section">
+    <div class="kpis-grid">
+      <div
+        *ngFor="let kpi of resumen.kpis"
+        class="kpi-card"
+        [ngClass]="'kpi-border-' + kpi.color"
+        [routerLink]="kpi.ruta"
+        [title]="'Ir a ' + kpi.titulo"
+      >
+        <div class="kpi-top">
+          <div class="kpi-icon-wrap" [ngClass]="'kpi-icon-' + kpi.color">
+            <ng-container [ngSwitch]="kpi.icono">
+              <svg *ngSwitchCase="'users'" lucideUsers class="kpi-svg"></svg>
+              <svg *ngSwitchCase="'stethoscope'" lucideStethoscope class="kpi-svg"></svg>
+              <svg *ngSwitchCase="'calendar'" lucideCalendar class="kpi-svg"></svg>
+              <svg *ngSwitchCase="'clock'" lucideClock class="kpi-svg"></svg>
+              <svg *ngSwitchCase="'activity'" lucideClipboardList class="kpi-svg"></svg>
+              <svg *ngSwitchCase="'flask-conical'" lucideFlaskConical class="kpi-svg"></svg>
+              <svg *ngSwitchCase="'shield-check'" lucideShield class="kpi-svg"></svg>
+              <svg *ngSwitchCase="'calendar-check'" lucideCalendarCheck class="kpi-svg"></svg>
+              <svg *ngSwitchDefault lucideCalendar class="kpi-svg"></svg>
+            </ng-container>
+          </div>
+          <span class="kpi-link-hint">
+            <svg lucideChevronRight class="hint-svg"></svg>
+          </span>
+        </div>
+
+        <div class="kpi-body">
+          <h2 class="kpi-number">{{ kpi.valor | number }}</h2>
+          <span class="kpi-title">{{ kpi.titulo }}</span>
+          <p class="kpi-subtitle">{{ kpi.subtitulo }}</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GRÁFICOS Y ESTADÍSTICAS VISUALES -->
+  <section *ngIf="resumen" class="charts-section">
+    <div class="charts-grid" [ngClass]="{'charts-single-col': !resumen.formulasPorEstado || resumen.formulasPorEstado.length === 0}">
+      <!-- GRÁFICO: CITAS POR ESTADO (DONUT CHART) -->
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <h3 class="chart-title">Distribución de Citas por Estado</h3>
+            <p class="chart-subtitle">Proporción de estados en el periodo</p>
+          </div>
+        </div>
+
+        <div class="chart-body" *ngIf="totalCitasPeriodo > 0; else sinCitasEstado">
+          <div class="donut-chart-wrapper">
+            <!-- DONUT SVG -->
+            <svg class="donut-svg" viewBox="0 0 160 160" width="150" height="150">
+              <circle
+                class="donut-ring"
+                cx="80"
+                cy="80"
+                r="60"
+                fill="transparent"
+                stroke="#EAEAEA"
+                stroke-width="18"
+              ></circle>
+              <!-- Segmentos del donut calculados dinámicamente -->
+              <circle
+                *ngFor="let seg of segmentosDonut"
+                class="donut-segment"
+                cx="80"
+                cy="80"
+                r="60"
+                fill="transparent"
+                [attr.stroke]="seg.color"
+                stroke-width="18"
+                [attr.stroke-dasharray]="seg.dashArray"
+                [attr.stroke-dashoffset]="seg.dashOffset"
+                transform="rotate(-90 80 80)"
+              ></circle>
+              <!-- Texto central -->
+              <text x="80" y="76" text-anchor="middle" class="donut-center-total">{{ totalCitasPeriodo }}</text>
+              <text x="80" y="93" text-anchor="middle" class="donut-center-label">Citas</text>
+            </svg>
+
+            <!-- LEYENDA DETALLADA -->
+            <div class="donut-legend">
+              <div *ngFor="let item of resumen.citasPorEstado" class="donut-legend-item">
+                <div class="donut-legend-info">
+                  <span class="donut-dot" [style.background-color]="item.color"></span>
+                  <span class="donut-name">{{ formatearNombreEstado(item.estado) }}</span>
+                </div>
+                <div class="donut-legend-values">
+                  <span class="donut-count">{{ item.cantidad }}</span>
+                  <span class="donut-pct">({{ item.porcentaje }}%)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <ng-template #sinCitasEstado>
+          <div class="chart-empty-state">
+            <svg lucideCalendarClock class="empty-icon"></svg>
+            <p>No hay citas registradas en el periodo seleccionado.</p>
+          </div>
+        </ng-template>
+      </div>
+
+      <!-- DISTRIBUCIÓN DE FÓRMULAS MAGISTRALES SI EXISTEN -->
+      <div *ngIf="resumen.formulasPorEstado && resumen.formulasPorEstado.length > 0" class="chart-card formulas-dist-card">
+        <div class="chart-header">
+          <div>
+            <h3 class="chart-title">Estado de Fórmulas Magistrales</h3>
+            <p class="chart-subtitle">Resumen de producción y dispensación</p>
+          </div>
+          <a routerLink="/formulas-magistrales" class="chart-header-link">Ver todas &rarr;</a>
+        </div>
+
+        <div class="formulas-bars-list">
+          <div *ngFor="let f of resumen.formulasPorEstado" class="formula-progress-row">
+            <div class="formula-progress-label">
+              <span class="formula-name">{{ f.estado }}</span>
+              <span class="formula-metrics"><strong>{{ f.cantidad }}</strong> formulas ({{ f.porcentaje }}%)</span>
+            </div>
+            <div class="progress-track">
+              <div
+                class="progress-fill"
+                [style.width.%]="f.porcentaje"
+                [style.background-color]="f.color"
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <!-- TABLA COMPACTA: PRÓXIMAS CITAS -->
+  <section *ngIf="resumen" class="upcoming-section">
+    <div class="section-card">
+      <div class="section-card-header">
+        <div>
+          <h3 class="section-title">Próximas Citas en Agenda</h3>
+          <p class="section-subtitle">Citas programadas o confirmadas a partir de hoy</p>
+        </div>
+        <a routerLink="/citas" class="btn-link-action">
+          <span>Abrir Agenda Completa</span>
+          <svg lucideChevronRight class="link-action-svg"></svg>
+        </a>
+      </div>
+
+      <div class="table-responsive" *ngIf="resumen.proximasCitas && resumen.proximasCitas.length > 0; else sinProximasCitas">
+        <table class="compact-table">
+          <thead>
+            <tr>
+              <th>Fecha y Hora</th>
+              <th>Paciente</th>
+              <th *ngIf="esAdmin">Médico Responsable</th>
+              <th>Motivo de Consulta</th>
+              <th>Estado</th>
+              <th class="text-right">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let cita of resumen.proximasCitas">
+              <td class="font-medium date-cell">
+                <svg lucideClock class="cell-icon"></svg>
+                <span>{{ formatearFechaHora(cita.fechaHora) }}</span>
+              </td>
+              <td>
+                <div class="patient-cell">
+                  <span class="patient-name">{{ cita.nombrePaciente }}</span>
+                  <span class="patient-dni" *ngIf="cita.dniPaciente">DNI: {{ cita.dniPaciente }}</span>
+                </div>
+              </td>
+              <td *ngIf="esAdmin">
+                <div class="doctor-cell">
+                  <span class="doctor-name">{{ cita.nombreMedico }}</span>
+                  <span class="doctor-esp" *ngIf="cita.especialidadMedico">{{ cita.especialidadMedico }}</span>
+                </div>
+              </td>
+              <td class="motivo-cell" [title]="cita.motivo">
+                {{ cita.motivo }}
+              </td>
+              <td>
+                <span class="badge-status" [ngClass]="'status-' + cita.estado.toLowerCase()">
+                  {{ cita.estado }}
+                </span>
+              </td>
+              <td class="text-right">
+                <button
+                  type="button"
+                  class="btn-table-action"
+                  [routerLink]="['/citas']"
+                  [queryParams]="{ search: cita.dniPaciente || cita.nombrePaciente }"
+                  title="Consultar cita"
+                >
+                  Ver Cita
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ng-template #sinProximasCitas>
+        <div class="empty-table-state">
+          <svg lucideCalendarCheck class="empty-icon"></svg>
+          <p>No tienes citas programadas pendientes para los próximos días.</p>
+          <a routerLink="/citas" class="btn-create-first">Agendar nueva cita</a>
+        </div>
+      </ng-template>
+    </div>
+  </section>
+
+  <!-- ACCESOS RÁPIDOS A MÓDULOS DEL SISTEMA -->
+  <section class="quick-access-section" aria-label="Accesos directos a módulos autorizados">
+    <h3 class="quick-access-title">Accesos Rápidos</h3>
+
+    <div class="quick-grid">
+      <!-- Pacientes -->
+      <a routerLink="/pacientes" class="quick-card">
+        <div class="quick-icon-wrap icon-primary">
+          <svg lucideUsers class="quick-svg"></svg>
+        </div>
+        <div class="quick-texts">
+          <span class="quick-name">Pacientes</span>
+          <span class="quick-desc">Filiación, antecedentes y expedientes</span>
+        </div>
+      </a>
+
+      <!-- Citas -->
+      <a routerLink="/citas" class="quick-card">
+        <div class="quick-icon-wrap icon-info">
+          <svg lucideCalendar class="quick-svg"></svg>
+        </div>
+        <div class="quick-texts">
+          <span class="quick-name">Citas Médicas</span>
+          <span class="quick-desc">Agenda, confirmaciones y reprogramaciones</span>
+        </div>
+      </a>
+
+      <!-- Consultas -->
+      <a routerLink="/consultas" class="quick-card">
+        <div class="quick-icon-wrap icon-success">
+          <svg lucideClipboardList class="quick-svg"></svg>
+        </div>
+        <div class="quick-texts">
+          <span class="quick-name">Consultas Clínicas</span>
+          <span class="quick-desc">Diagnósticos, evolución y recetas</span>
+        </div>
+      </a>
+
+      <!-- Fórmulas Magistrales -->
+      <a routerLink="/formulas-magistrales" class="quick-card">
+        <div class="quick-icon-wrap icon-secondary">
+          <svg lucideFlaskConical class="quick-svg"></svg>
+        </div>
+        <div class="quick-texts">
+          <span class="quick-name">Fórmulas Magistrales</span>
+          <span class="quick-desc">Prescripción y preparación farmacéutica</span>
+        </div>
+      </a>
+
+      <!-- Médicos (Solo ADMIN) -->
+      <a *ngIf="esAdmin" routerLink="/medicos" class="quick-card">
+        <div class="quick-icon-wrap icon-primary">
+          <svg lucideStethoscope class="quick-svg"></svg>
+        </div>
+        <div class="quick-texts">
+          <span class="quick-name">Cuerpo Médico</span>
+          <span class="quick-desc">Especialidades, colegiaturas y estados</span>
+        </div>
+      </a>
+
+      <!-- Usuarios y Roles (Solo ADMIN) -->
+      <a *ngIf="esAdmin" routerLink="/usuarios" class="quick-card">
+        <div class="quick-icon-wrap icon-warning">
+          <svg lucideUserCog class="quick-svg"></svg>
+        </div>
+        <div class="quick-texts">
+          <span class="quick-name">Usuarios y Accesos</span>
+          <span class="quick-desc">Gestión de credenciales y asignación de roles</span>
+        </div>
+      </a>
+    </div>
+  </section>
+</div>
