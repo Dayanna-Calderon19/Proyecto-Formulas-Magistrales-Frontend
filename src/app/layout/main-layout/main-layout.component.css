@@ -1,0 +1,66 @@
+.main-layout-container {
+  min-height: 100vh;
+  background-color: var(--color-background);
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Backdrop semitransparente para móvil */
+.mobile-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(23, 63, 79, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 45;
+  animation: fadeInBackdrop 0.2s ease-out forwards;
+}
+
+@keyframes fadeInBackdrop {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Contenedor principal que se desplaza junto con el sidebar */
+.layout-wrapper {
+  margin-left: 260px;
+  width: calc(100% - 260px);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-sizing: border-box;
+}
+
+.layout-wrapper.collapsed-sidebar {
+  margin-left: 72px;
+  width: calc(100% - 72px);
+}
+
+/* Área central de contenido donde se renderizan las vistas secundarias */
+.content-area {
+  flex: 1;
+  padding: 1.5rem 2rem;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* Adaptación responsive para tablets y móviles */
+@media (max-width: 768px) {
+  .layout-wrapper {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  .content-area {
+    padding: 1rem 0.85rem;
+  }
+}

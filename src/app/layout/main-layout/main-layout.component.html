@@ -1,0 +1,30 @@
+<div class="main-layout-container">
+  <!-- Menú lateral -->
+  <app-sidebar></app-sidebar>
+
+  <!-- Backdrop oscuro para móvil al abrir el drawer -->
+  @if (layoutService.isMobileOpen()) {
+    <div
+      class="mobile-backdrop"
+      (click)="layoutService.closeMobile()"
+      aria-label="Cerrar menú lateral"
+    ></div>
+  }
+
+  <!-- Contenedor de contenido desplazado según el sidebar -->
+  <div
+    class="layout-wrapper"
+    [class.collapsed-sidebar]="layoutService.isCollapsed()"
+  >
+    <!-- Barra superior -->
+    <app-header></app-header>
+
+    <!-- Área de contenido principal -->
+    <main class="content-area" role="main">
+      <router-outlet></router-outlet>
+    </main>
+
+    <!-- Pie de página -->
+    <app-footer></app-footer>
+  </div>
+</div>

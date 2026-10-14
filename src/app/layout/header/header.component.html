@@ -1,0 +1,428 @@
+<header class="app-header">
+  <div class="header-left">
+    <!-- Botón hamburguesa para móvil -->
+    <button
+      type="button"
+      class="icon-btn mobile-toggle-btn"
+      (click)="layoutService.toggleMobile()"
+      aria-label="Abrir o cerrar menú de navegación"
+    >
+      <svg lucideMenu class="btn-icon"></svg>
+    </button>
+
+    <!-- Botón de colapso para escritorio -->
+    <button
+      type="button"
+      class="icon-btn desktop-collapse-btn"
+      (click)="layoutService.toggleCollapsed()"
+      [attr.aria-label]="layoutService.isCollapsed() ? 'Expandir menú lateral' : 'Contraer menú lateral'"
+      [title]="layoutService.isCollapsed() ? 'Expandir menú lateral' : 'Contraer menú lateral'"
+    >
+      <svg lucideMenu class="btn-icon"></svg>
+    </button>
+
+    <!-- Marca o logotipo textual -->
+    <div class="brand-container">
+      <div class="brand-icon-wrapper">
+        <svg lucideHospital class="brand-icon"></svg>
+      </div>
+      <div class="brand-titles">
+        <span class="brand-name">Sistema de Salud</span>
+        <span class="brand-subtitle">Gestión Médica y Fórmulas Magistrales</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <!-- Usuario autenticado con Menú Desplegable -->
+    @if (username) {
+      <div class="user-menu-container">
+        <button
+          type="button"
+          class="user-pill-btn"
+          (click)="toggleDropdown($event)"
+          [class.active]="isDropdownOpen"
+          aria-haspopup="true"
+          [attr.aria-expanded]="isDropdownOpen"
+          title="Menú de cuenta de usuario"
+        >
+          <div class="user-avatar">
+            <svg lucideUser class="avatar-icon"></svg>
+            <span class="status-dot"></span>
+          </div>
+          <div class="user-info">
+            <span class="user-name">{{ username }}</span>
+            <span class="user-role">{{ primaryRole }}</span>
+          </div>
+          <svg lucideChevronDown class="dropdown-chevron" [class.rotated]="isDropdownOpen"></svg>
+        </button>
+
+        <!-- Menú flotante del usuario -->
+        @if (isDropdownOpen) {
+          <div class="user-dropdown-menu" (click)="$event.stopPropagation()">
+            <div class="dropdown-header">
+              <div class="dropdown-avatar">
+                {{ username.charAt(0).toUpperCase() }}
+              </div>
+              <div class="dropdown-user-details">
+                <span class="dropdown-user-name">{{ username }}</span>
+                <span class="dropdown-badge" [class.badge-admin]="primaryRole === 'ADMIN'" [class.badge-medico]="primaryRole === 'MEDICO'">
+                  {{ primaryRole }}
+                </span>
+              </div>
+            </div>
+
+            <div class="dropdown-divider"></div>
+
+            <div class="dropdown-actions">
+              <!-- Opción 1: Mi Perfil -->
+              <button type="button" class="dropdown-item" (click)="abrirMiPerfil()">
+                <div class="item-icon-wrap icon-profile">
+                  <svg lucideUser class="dropdown-item-icon"></svg>
+                </div>
+                <div class="item-text">
+                  <span class="item-title">Mi Perfil</span>
+                  <span class="item-desc">Ver información personal y rol</span>
+                </div>
+              </button>
+
+              <!-- Opción 2: Cambiar Contraseña -->
+              <button type="button" class="dropdown-item" (click)="abrirCambiarPassword()">
+                <div class="item-icon-wrap icon-security">
+                  <svg lucideKeyRound class="dropdown-item-icon"></svg>
+                </div>
+                <div class="item-text">
+                  <span class="item-title">Seguridad de la Cuenta</span>
+                  <span class="item-desc">Actualizar mi contraseña</span>
+                </div>
+              </button>
+            </div>
+
+            <div class="dropdown-divider"></div>
+
+            <!-- Opción 3: Cerrar Sesión -->
+            <button type="button" class="dropdown-item item-logout" (click)="onLogout()">
+              <div class="item-icon-wrap icon-logout">
+                <svg lucideLogOut class="dropdown-item-icon"></svg>
+              </div>
+              <div class="item-text">
+                <span class="item-title">Cerrar Sesión</span>
+                <span class="item-desc">Salir del sistema de forma segura</span>
+              </div>
+            </button>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Botón directo de Cerrar Sesión en Header -->
+    <button
+      type="button"
+      class="logout-btn"
+      (click)="onLogout()"
+      aria-label="Cerrar sesión en el sistema"
+      title="Cerrar sesión"
+    >
+      <svg lucideLogOut class="logout-icon"></svg>
+      <span class="logout-text">Salir</span>
+    </button>
+  </div>
+</header>
+
+<!-- ======================================================== -->
+<!-- MODAL: MI PERFIL                                         -->
+<!-- ======================================================== -->
+@if (showPerfilModal) {
+  <div class="modal-backdrop" (click)="cerrarPerfilModal()">
+    <div class="modal-card modal-profile" (click)="$event.stopPropagation()">
+      <header class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="header-icon-badge">
+            <svg lucideUser class="modal-header-icon"></svg>
+          </div>
+          <div>
+            <h2>Mi Perfil de Usuario</h2>
+            <span class="modal-subtitle">Información general de tu cuenta y privilegios autorizados</span>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" (click)="cerrarPerfilModal()" aria-label="Cerrar">
+          <svg lucideX class="close-icon"></svg>
+        </button>
+      </header>
+
+      @if (loadingPerfil) {
+        <div class="modal-loading-state">
+          <svg lucideLoaderCircle class="spinner-icon"></svg>
+          <p>Cargando información del perfil...</p>
+        </div>
+      } @else if (perfilError) {
+        <div class="modal-alert-error">
+          <svg lucideAlertTriangle class="alert-icon"></svg>
+          <span>{{ perfilError }}</span>
+        </div>
+      } @else if (perfil) {
+        <div class="profile-modal-body">
+          <!-- Tarjeta principal de identidad -->
+          <div class="profile-hero">
+            <div class="hero-avatar">
+              {{ perfil.username.charAt(0).toUpperCase() }}
+            </div>
+            <div class="hero-details">
+              <h3 class="hero-name">{{ perfil.nombreCompleto || perfil.username }}</h3>
+              <p class="hero-email">
+                <svg lucideMail class="tiny-icon"></svg>
+                {{ perfil.correo }}
+              </p>
+              <div class="hero-tags">
+                @for (rol of perfil.roles; track rol) {
+                  <span class="role-badge" [class.badge-admin]="rol.includes('ADMIN')" [class.badge-medico]="rol.includes('MEDICO')">
+                    <svg lucideShield class="tiny-icon"></svg>
+                    {{ rol.replace('ROLE_', '') }}
+                  </span>
+                }
+                <span class="status-badge" [class.active]="perfil.activo">
+                  <span class="status-indicator-dot"></span>
+                  {{ perfil.activo ? 'Cuenta Activa' : 'Inactiva' }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Grilla de detalles de la cuenta -->
+          <div class="profile-details-grid">
+            <div class="detail-box">
+              <span class="detail-label">Nombre de usuario</span>
+              <span class="detail-val font-semibold">{{ perfil.username }}</span>
+            </div>
+            <div class="detail-box">
+              <span class="detail-label">Fecha de Alta</span>
+              <span class="detail-val">
+                <svg lucideCalendar class="tiny-icon inline-icon"></svg>
+                {{ perfil.fechaCreacion | date:'dd/MM/yyyy HH:mm' }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Si el usuario está asociado a un perfil médico -->
+          @if (perfil.idMedico || perfil.nombreMedico) {
+            <div class="clinical-profile-card">
+              <div class="card-title-row">
+                <div class="clinical-icon-wrap">
+                  <svg lucideStethoscope class="clinical-icon"></svg>
+                </div>
+                <div>
+                  <h4 class="clinical-card-title">Ficha Profesional Médica Vinculada</h4>
+                  <span class="clinical-card-subtitle">Datos colegiados para la emisión de consultas y fórmulas magistrales</span>
+                </div>
+              </div>
+
+              <div class="clinical-grid">
+                <div class="clinical-item">
+                  <span class="c-label">Nombre en Colegiatura:</span>
+                  <span class="c-val font-semibold">{{ perfil.nombreMedico }}</span>
+                </div>
+                <div class="clinical-item">
+                  <span class="c-label">Especialidad:</span>
+                  <span class="c-val highlight-specialty">{{ perfil.especialidad || 'Medicina General' }}</span>
+                </div>
+                <div class="clinical-item">
+                  <span class="c-label">Colegiatura / CMP:</span>
+                  <span class="c-val font-mono">{{ perfil.colegiatura || 'No especificada' }}</span>
+                </div>
+                <div class="clinical-item">
+                  <span class="c-label">DNI Médico:</span>
+                  <span class="c-val">{{ perfil.dniMedico || 'No registrado' }}</span>
+                </div>
+                @if (perfil.telefonoMedico) {
+                  <div class="clinical-item">
+                    <span class="c-label">Teléfono de Contacto:</span>
+                    <span class="c-val">
+                      <svg lucidePhone class="tiny-icon inline-icon"></svg>
+                      {{ perfil.telefonoMedico }}
+                    </span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      <footer class="modal-footer">
+        <button type="button" class="btn btn-secondary" (click)="cerrarPerfilModal()">
+          Cerrar
+        </button>
+      </footer>
+    </div>
+  </div>
+}
+
+<!-- ======================================================== -->
+<!-- MODAL: CAMBIAR CONTRASEÑA PROPIA                         -->
+<!-- ======================================================== -->
+@if (showPasswordModal) {
+  <div class="modal-backdrop" (click)="cerrarPasswordModal()">
+    <div class="modal-card modal-security" (click)="$event.stopPropagation()">
+      <header class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="header-icon-badge security-badge-icon">
+            <svg lucideKeyRound class="modal-header-icon"></svg>
+          </div>
+          <div>
+            <h2>Actualizar Contraseña</h2>
+            <span class="modal-subtitle">Refuerza la seguridad de tu cuenta con una nueva clave</span>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" (click)="cerrarPasswordModal()" aria-label="Cerrar">
+          <svg lucideX class="close-icon"></svg>
+        </button>
+      </header>
+
+      @if (passwordError) {
+        <div class="modal-alert-error">
+          <svg lucideAlertTriangle class="alert-icon"></svg>
+          <span>{{ passwordError }}</span>
+        </div>
+      }
+
+      @if (passwordSuccess) {
+        <div class="modal-alert-success">
+          <svg lucideCheckCircle class="alert-icon"></svg>
+          <span>{{ passwordSuccess }}</span>
+        </div>
+      }
+
+      <form (ngSubmit)="submitCambioPassword()" class="modal-form">
+        <!-- Contraseña actual -->
+        <div class="form-group">
+          <label for="passActual" class="form-label">
+            Contraseña actual <span class="required">*</span>
+          </label>
+          <div class="password-input-wrapper">
+            <input
+              id="passActual"
+              [type]="showActualPass ? 'text' : 'password'"
+              class="form-control"
+              placeholder="Ingresa tu contraseña actual"
+              [(ngModel)]="passwordActual"
+              name="passwordActual"
+              autocomplete="current-password"
+              required
+            />
+            <button
+              type="button"
+              class="password-toggle-btn"
+              (click)="showActualPass = !showActualPass"
+              aria-label="Mostrar u ocultar contraseña actual"
+            >
+              @if (showActualPass) {
+                <svg lucideEyeOff class="toggle-eye-icon"></svg>
+              } @else {
+                <svg lucideEye class="toggle-eye-icon"></svg>
+              }
+            </button>
+          </div>
+          <small class="form-hint">Requerida para comprobar tu identidad antes de autorizar el cambio.</small>
+        </div>
+
+        <!-- Nueva contraseña -->
+        <div class="form-group">
+          <label for="passNuevo" class="form-label">
+            Nueva contraseña <span class="required">*</span>
+          </label>
+          <div class="password-input-wrapper">
+            <input
+              id="passNuevo"
+              [type]="showNuevoPass ? 'text' : 'password'"
+              class="form-control"
+              placeholder="Mínimo 8 caracteres (letras y números)"
+              [(ngModel)]="passwordNuevo"
+              name="passwordNuevo"
+              autocomplete="new-password"
+              required
+            />
+            <button
+              type="button"
+              class="password-toggle-btn"
+              (click)="showNuevoPass = !showNuevoPass"
+              aria-label="Mostrar u ocultar nueva contraseña"
+            >
+              @if (showNuevoPass) {
+                <svg lucideEyeOff class="toggle-eye-icon"></svg>
+              } @else {
+                <svg lucideEye class="toggle-eye-icon"></svg>
+              }
+            </button>
+          </div>
+
+          <!-- Indicador de requisitos en tiempo real -->
+          <div class="password-checklist">
+            <div class="check-item" [class.valid]="passwordNuevo.length >= 8">
+              <svg lucideCheck class="check-mini-icon"></svg>
+              <span>Mínimo 8 caracteres</span>
+            </div>
+            <div class="check-item" [class.valid]="passwordNuevo.length > 0 && !!passwordNuevo.match('^[a-zA-Z0-9]*[a-zA-Z]+[a-zA-Z0-9]*$')">
+              <svg lucideCheck class="check-mini-icon"></svg>
+              <span>Al menos una letra</span>
+            </div>
+            <div class="check-item" [class.valid]="passwordNuevo.length > 0 && !!passwordNuevo.match('.*[0-9].*')">
+              <svg lucideCheck class="check-mini-icon"></svg>
+              <span>Al menos un número</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Confirmar nueva contraseña -->
+        <div class="form-group">
+          <label for="passConfirm" class="form-label">
+            Confirmar nueva contraseña <span class="required">*</span>
+          </label>
+          <div class="password-input-wrapper">
+            <input
+              id="passConfirm"
+              [type]="showConfirmPass ? 'text' : 'password'"
+              class="form-control"
+              placeholder="Repite la nueva contraseña"
+              [(ngModel)]="passwordConfirm"
+              name="passwordConfirm"
+              autocomplete="new-password"
+              required
+            />
+            <button
+              type="button"
+              class="password-toggle-btn"
+              (click)="showConfirmPass = !showConfirmPass"
+              aria-label="Mostrar u ocultar confirmación"
+            >
+              @if (showConfirmPass) {
+                <svg lucideEyeOff class="toggle-eye-icon"></svg>
+              } @else {
+                <svg lucideEye class="toggle-eye-icon"></svg>
+              }
+            </button>
+          </div>
+          @if (passwordConfirm.length > 0 && passwordNuevo !== passwordConfirm) {
+            <span class="field-error-text">Las contraseñas no coinciden.</span>
+          } @else if (passwordConfirm.length > 0 && passwordNuevo === passwordConfirm) {
+            <span class="field-success-text">Las contraseñas coinciden correctamente.</span>
+          }
+        </div>
+
+        <footer class="modal-footer">
+          <button type="button" class="btn btn-outline" (click)="cerrarPasswordModal()" [disabled]="passwordSubmitting">
+            Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary" [disabled]="passwordSubmitting">
+            @if (passwordSubmitting) {
+              <svg lucideLoaderCircle class="btn-icon spinning"></svg>
+              <span>Actualizando clave...</span>
+            } @else {
+              <svg lucideCheck class="btn-icon"></svg>
+              <span>Confirmar cambio</span>
+            }
+          </button>
+        </footer>
+      </form>
+    </div>
+  </div>
+}

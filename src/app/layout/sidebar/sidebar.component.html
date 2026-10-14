@@ -1,0 +1,164 @@
+<aside
+  class="app-sidebar"
+  [class.collapsed]="layoutService.isCollapsed()"
+  [class.mobile-open]="layoutService.isMobileOpen()"
+  aria-label="Menú principal de navegación"
+>
+  <!-- Cabecera del sidebar -->
+  <div class="sidebar-header">
+    <div class="sidebar-brand" [class.hidden-text]="layoutService.isCollapsed()">
+      <span class="brand-tag">CLÍNICA</span>
+      <span class="brand-text">MedConsult</span>
+    </div>
+
+    <!-- Botón cerrar en dispositivos móviles -->
+    <button
+      type="button"
+      class="sidebar-close-btn"
+      (click)="layoutService.closeMobile()"
+      aria-label="Cerrar menú lateral"
+    >
+      <svg lucideX class="close-icon"></svg>
+    </button>
+  </div>
+
+  <!-- Navegación y módulos -->
+  <nav class="sidebar-nav">
+    <!-- Grupo Principal -->
+    <div class="nav-section-title" [class.hidden-title]="layoutService.isCollapsed()">
+      PRINCIPAL
+    </div>
+    <ul class="nav-list">
+      <li class="nav-item">
+        <a
+          routerLink="/dashboard"
+          routerLinkActive="active"
+          (click)="onNavigate()"
+          class="nav-link"
+          [title]="layoutService.isCollapsed() ? 'Dashboard' : ''"
+        >
+          <svg lucideLayoutDashboard class="nav-icon"></svg>
+          <span class="nav-label">Dashboard</span>
+        </a>
+      </li>
+    </ul>
+
+    <!-- Grupo Asistencial -->
+    <div class="nav-section-title" [class.hidden-title]="layoutService.isCollapsed()">
+      GESTIÓN CLÍNICA
+    </div>
+    <ul class="nav-list">
+      <li class="nav-item">
+        <a
+          routerLink="/pacientes"
+          routerLinkActive="active"
+          (click)="onNavigate()"
+          class="nav-link"
+          [title]="layoutService.isCollapsed() ? 'Pacientes' : ''"
+        >
+          <svg lucideUsers class="nav-icon"></svg>
+          <span class="nav-label">Pacientes</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a
+          routerLink="/medicos"
+          routerLinkActive="active"
+          (click)="onNavigate()"
+          class="nav-link"
+          [title]="layoutService.isCollapsed() ? 'Médicos' : ''"
+        >
+          <svg lucideStethoscope class="nav-icon"></svg>
+          <span class="nav-label">Médicos</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a
+          routerLink="/citas"
+          routerLinkActive="active"
+          (click)="onNavigate()"
+          class="nav-link"
+          [title]="layoutService.isCollapsed() ? 'Citas' : ''"
+        >
+          <svg lucideCalendar class="nav-icon"></svg>
+          <span class="nav-label">Citas</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a
+          routerLink="/consultas"
+          routerLinkActive="active"
+          (click)="onNavigate()"
+          class="nav-link"
+          [title]="layoutService.isCollapsed() ? 'Consultas Médicas' : ''"
+        >
+          <svg lucideClipboardList class="nav-icon"></svg>
+          <span class="nav-label">Consultas Médicas</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a
+          routerLink="/formulas-magistrales"
+          routerLinkActive="active"
+          (click)="onNavigate()"
+          class="nav-link"
+          [title]="layoutService.isCollapsed() ? 'Fórmulas Magistrales' : ''"
+        >
+          <svg lucideFlaskConical class="nav-icon"></svg>
+          <span class="nav-label">Fórmulas Magistrales</span>
+        </a>
+      </li>
+    </ul>
+
+    <!-- Grupo Administración (filtrado por rol si aplica) -->
+    @if (canAccessAdmin()) {
+      <div class="nav-section-title" [class.hidden-title]="layoutService.isCollapsed()">
+        ADMINISTRACIÓN
+      </div>
+      <ul class="nav-list">
+        <li class="nav-item">
+          <a
+            routerLink="/usuarios"
+            routerLinkActive="active"
+            (click)="onNavigate()"
+            class="nav-link"
+            [title]="layoutService.isCollapsed() ? 'Usuarios' : ''"
+          >
+            <svg lucideUserCog class="nav-icon"></svg>
+            <span class="nav-label">Usuarios</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a
+            routerLink="/roles"
+            routerLinkActive="active"
+            (click)="onNavigate()"
+            class="nav-link"
+            [title]="layoutService.isCollapsed() ? 'Roles' : ''"
+          >
+            <svg lucideShield class="nav-icon"></svg>
+            <span class="nav-label">Roles</span>
+          </a>
+        </li>
+      </ul>
+    }
+  </nav>
+
+  <!-- Pie del Sidebar para colapso en escritorio -->
+  <div class="sidebar-footer">
+    <button
+      type="button"
+      class="collapse-toggle-btn"
+      (click)="layoutService.toggleCollapsed()"
+      [attr.aria-label]="layoutService.isCollapsed() ? 'Expandir menú lateral' : 'Contraer menú lateral'"
+      [title]="layoutService.isCollapsed() ? 'Expandir menú' : 'Contraer menú'"
+    >
+      @if (layoutService.isCollapsed()) {
+        <svg lucideChevronRight class="toggle-icon"></svg>
+      } @else {
+        <svg lucideChevronLeft class="toggle-icon"></svg>
+        <span class="collapse-text">Contraer menú</span>
+      }
+    </button>
+  </div>
+</aside>
